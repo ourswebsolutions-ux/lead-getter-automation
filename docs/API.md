@@ -10,7 +10,7 @@ Channels marked 🔒 require an active license when licensing is enforced.
 | Settings | `settings:get`, `settings:update(patch)`, `secrets:status` (masked), `secrets:set(name, value\|null)`, `integrations:test(name)` |
 | Jobs | `jobs:list({types, limit, active})`, `jobs:get(id)`, `jobs:logs(id)`, `jobs:pause/resume/cancel(id)` |
 | Leads | `leads:list(filter, {limit, offset, sort, dir})`, `leads:get(id)`, `leads:create(input)`, `leads:update(id, patch)`, `leads:bulkUpdate(ids, {category_id, outreach_status, addTags, removeTags})`, `leads:delete(ids, purge?)`, `leads:idsForFilter(filter)`, `leads:addEmail`, `leads:setPrimaryEmail`, `leads:removeEmail`, `leads:optOut`, `leads:categories`, `leads:createCategory`, `leads:renameCategory`, `leads:deleteCategory`, `leads:filterOptions`, `leads:savedFilters`, `leads:saveFilter`, `leads:deleteSavedFilter`, `leads:duplicates`, `leads:merge(keepId, others)`, `leads:export({leadIds\|filter, format})`, `leads:importPick`, `leads:importCommit(file, mapping, {tag, category})` |
-| Discovery | 🔒`discovery:start(source, params)` (`google_maps`, `linkedin`, `apollo`, `podcasts`, `website`), `discovery:history(source)`, `discovery:countries` |
+| Discovery | 🔒`discovery:start(source, params)` (`google_maps`, `linkedin`, `apollo`, `website`), `discovery:history(source)`, `discovery:countries` |
 | Verification | 🔒`verification:single(email)`, 🔒`verification:bulk(emails)`, 🔒`verification:file`, 🔒`verification:leads(leadIds\|null, statuses)`, 🔒`verification:reverify(emailIds)`, `verification:stats`, `verification:history(opts)`, `verification:batch(batchId)`, `verification:port25`, `verification:export(opts)` |
 | AI | `ai:providers`, `ai:saveProvider(id, {apiKey, defaultModel, enabled})`, `ai:testProvider(id)`, `ai:listModels(id)`, `ai:usage(days)`, 🔒`ai:research(leadIds)`, 🔒`ai:outreach(leadId, channel, guidance?)` |
 | Agent | `agent:approvals('open'\|'all')`, 🔒`agent:approve(id, text?)`, `agent:reject(id)`, `agent:regenerate(id)`, `agent:draft(convId)`, `agent:runTurn(convId)`, `agent:pricingSuggestion(convId)` |
@@ -19,7 +19,7 @@ Channels marked 🔒 require an active license when licensing is enforced.
 | SMTP | `smtp:list`, `smtp:create(account)`, `smtp:update(id, account)`, `smtp:delete(id)`, `smtp:test(id)`, `smtp:sendTest(id, to, subject, body, isHtml)`, `smtp:poll(id)` |
 | Campaigns | `campaigns:list(channel)`, `campaigns:get(id)`, `campaigns:create(channel, name, config, steps)`, `campaigns:update(id, patch)`, `campaigns:delete(id)`, `campaigns:addRecipients(id, {leadIds\|filter})`, `campaigns:removeRecipients`, `campaigns:recipients(id, opts)`, 🔒`campaigns:start(id, scheduledAt?)`, `campaigns:pause`, 🔒`campaigns:resume`, `campaigns:stop`, `campaigns:preview(id, leadId, step)`, `campaigns:defaults(channel)`, `suppression:list/add/remove` |
 | Analytics | `analytics:dashboard({from, to})`, `analytics:sidebar` |
-| License | `license:status`, `license:activate(key)`, `license:validate`, `license:deactivate`, `license:plans` |
+| License | `license:status`, `license:activate(key)`, `license:validate`, `license:deactivate`, `license:plans`, `license:startTrial`, `license:requestPlan({planCode, name, email, phone, message})` |
 | Data | `data:wipe('DELETE ALL DATA')` |
 
 ## Events (main → renderer)

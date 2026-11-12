@@ -2098,3 +2098,14 @@ table.tbl {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ------------------------------------------------------------------ top bar */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 22px 0 0;
+  height: 40px;
+  flex-shrink: 0;
+}

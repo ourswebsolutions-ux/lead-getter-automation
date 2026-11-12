@@ -22,21 +22,6 @@ Note: Google has announced restrictions on the Custom Search JSON API for new cu
 
 Uses `mixed_people/api_search` (falls back to `mixed_people/search`) and `mixed_companies/search` with title, seniority, industry keyword, location and employee-range filters. **Reveal work emails** calls `people/match`, which consumes Apollo credits — the UI shows the maximum credits a search can use. Placeholder emails (`email_not_unlocked@…`) are discarded.
 
-## Website email extraction
+## Website email extraction (used by Google Maps and AI research)
 
-`src/main/services/sources/website.ts`: same-host crawl, contact/about/team pages first, robots.txt (longest-match, Allow/Disallow, Crawl-delay), page and size caps, polite delay. Extracts `mailto:` links, plain text, Cloudflare-protected (`data-cfemail`) and `name [at] domain [dot] com` obfuscations, `tel:` links and phone patterns, and social profile links. Each email keeps the URL it was found on and is classified (sales / contact / management / support / personal).
-
-## Podcasts
-
-| Platform | Method | Key |
-|---|---|---|
-| Listen Notes | Official API search; listed emails on paid plans | `X-ListenAPI-Key` |
-| Spotify | Official Web API (client credentials) — emails parsed from public show descriptions | Client ID + secret |
-| Apple Podcasts | Public iTunes Search API → RSS feed `itunes:owner/itunes:email` | none |
-| Player FM | Public pages (best effort; markup may change) | none |
-| Pandora | Public search page (best effort; Pandora has no public podcast API, results may be empty) | none |
-| Deezer | Public API | none |
-
-**Deezer status (verified 12 Nov 2026):** Deezer's public API rejects every podcast endpoint (`/search/podcast`, `/podcast/{id}`) with error 600 "Invalid query" while track search still works. The app reports this clearly in the task log; use Apple Podcasts or Listen Notes, which index the same public feeds.
-
-With **Look up RSS feeds** on, shows without a listed email are matched to their public RSS feed (via the Apple directory) and the owner email is read from the channel header (first 512 KB only).
+There is no separate tab; with **Find emails on business websites** on, Google Maps discovery visits each lead's site. `src/main/services/sources/website.ts`: same-host crawl, contact/about/team pages first, robots.txt (Allow/Disallow, Crawl-delay), page and size caps, polite delay. Extracts `mailto:` links, plain text, Cloudflare-protected and `name [at] domain [dot] com` emails, `tel:` links, and social links. Each email keeps the URL it was found on.

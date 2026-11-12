@@ -143,7 +143,7 @@ export function LeadsPage() {
                 <EmptyState
                   icon={<Users size={22} />}
                   title={chips.length || debounced ? 'No leads match' : 'No leads yet'}
-                  desc={chips.length || debounced ? 'Try removing a filter or searching for something else.' : 'Discover businesses from Google Maps, LinkedIn, Apollo, websites or podcasts — or import a spreadsheet.'}
+                  desc={chips.length || debounced ? 'Try removing a filter or searching for something else.' : 'Discover businesses from Google Maps, LinkedIn or Apollo — or import a spreadsheet.'}
                   action={chips.length || debounced ? <Button onClick={() => { setFilter({}); setSearch('') }}>Clear filters</Button> : <Button variant="primary" icon={<Upload size={14} />} onClick={() => setModal('import')}>Import leads</Button>}
                 />
               }

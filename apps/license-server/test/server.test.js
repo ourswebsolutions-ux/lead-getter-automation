@@ -114,3 +114,33 @@ test('rejects malformed input', async () => {
   assert.equal((await call('/api/v1/licenses/activate', { licenseKey: 'LGE-AAAA-AAAA-AAAA-AAAA', deviceId: 'x' })).status, 400)
   assert.equal((await call('/api/v1/licenses/activate', { licenseKey: 'LGE-AAAA-AAAA-AAAA-AAAA', deviceId: DEVICE_A })).status, 404)
 })
+
+test('free trial: one per device, signed, 2 days, refused once used up', async () => {
+  const d = 'D'.repeat(32)
+  const a = await call('/api/v1/trial', { deviceId: d, deviceName: 'Laptop' })
+  assert.equal(a.status, 200)
+  const p = verifyToken(a.body.token)
+  assert.equal(p.plan, 'trial')
+  const days = (Date.parse(p.exp) - Date.now()) / 86400_000
+  assert.ok(days > 1.9 && days <= 2, `2-day trial (${days})`)
+  // Asking again (e.g. after reinstall) returns the same expiry, not a fresh trial.
+  const b = await call('/api/v1/trial', { deviceId: d })
+  assert.equal(verifyToken(b.body.token).exp, p.exp)
+  ctx.db.prepare("UPDATE trials SET expires_at = datetime('now', '-1 hour') WHERE device_id = ?").run(d)
+  const c = await call('/api/v1/trial', { deviceId: d })
+  assert.equal(c.status, 410)
+  assert.equal(c.body.code, 'trial_used')
+})
+
+test('purchase requests are stored, validated and fulfilled by issuing a license', async () => {
+  assert.equal((await call('/api/v1/purchase-requests', { planCode: 'six_month', name: 'Ali', email: 'bad' })).status, 400)
+  const r = await call('/api/v1/purchase-requests', { planCode: 'six_month', name: 'Ali', email: 'ali@shop.pk', phone: '+92300', deviceId: 'E'.repeat(32) })
+  assert.equal(r.status, 201)
+  const { body: login } = await call('/api/admin/login', { email: 'admin@test.io', password: 'correct horse battery' })
+  const list = await call('/api/admin/requests', undefined, login.token)
+  assert.equal(list.body.requests[0].status, 'new')
+  const lic = await call('/api/admin/licenses', { planCode: 'six_month', customerEmail: 'ali@shop.pk', requestId: r.body.id, sendEmail: false }, login.token)
+  assert.equal(lic.status, 201)
+  const after = await call('/api/admin/requests', undefined, login.token)
+  assert.equal(after.body.requests.find((x) => x.id === r.body.id).status, 'fulfilled')
+})

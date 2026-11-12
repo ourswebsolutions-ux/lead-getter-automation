@@ -53,7 +53,7 @@ export function seedSampleData(): void {
 }
 
 export async function runCapture(dir: string): Promise<void> {
-  const pages = ['dashboard', 'leads', 'conversations', 'agent', 'maps', 'verification', 'wa-campaigns', 'email-accounts', 'analytics', 'settings', 'license', 'podcasts']
+  const pages = ['dashboard', 'leads', 'conversations', 'agent', 'maps', 'verification', 'wa-campaigns', 'email-accounts', 'settings']
   mkdirSync(dir, { recursive: true })
   const win = BrowserWindow.getAllWindows()[0]
   await new Promise((r) => setTimeout(r, 2500))
@@ -67,5 +67,11 @@ export async function runCapture(dir: string): Promise<void> {
       writeFileSync(join(dir, `${theme}-${p}.png`), img.toPNG())
     }
   }
+  await win.webContents.executeJavaScript(`localStorage.setItem('lge.page', '"dashboard"'); location.reload(); true`)
+  await new Promise((r) => setTimeout(r, 3000))
+  await win.webContents.executeJavaScript(`window.dispatchEvent(new Event('lge:subscription')); true`)
+  await new Promise((r) => setTimeout(r, 1500))
+  await win.webContents.insertCSS('*,*::before,*::after{animation:none!important;transition:none!important}')
+  writeFileSync(join(dir, 'dark-subscription.png'), (await win.webContents.capturePage()).toPNG())
   app.quit()
 }

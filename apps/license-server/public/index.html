@@ -48,6 +48,8 @@
 
   <div id="appView" class="hidden">
     <div class="stats" id="stats"></div>
+    <div class="card"><h3>Subscription requests <span class="pill" id="reqCount"></span></h3>
+      <div style="overflow:auto"><table><thead><tr><th>When</th><th>Customer</th><th>Plan</th><th>Message</th><th>Status</th><th></th></tr></thead><tbody id="requests"></tbody></table></div></div>
     <div class="card"><h3>Issue a license</h3><div class="b">
       <form id="createForm" class="grid">
         <label>Plan<select name="planCode" id="planSelect"></select></label>
@@ -86,7 +88,7 @@
   const fmt = (d) => (d ? new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'Lifetime')
   async function loadStats() {
     const s = await api('/stats')
-    $('#stats').innerHTML = [['Licenses', s.licenses], ['Active', s.active], ['Expired', s.expired], ['Active devices', s.devices]].map(([l, v]) => `<div class="stat"><div class="l">${l}</div><div class="v">${v}</div></div>`).join('')
+    $('#stats').innerHTML = [['New requests', s.newRequests], ['Active licenses', s.active], ['Free trials', s.trials], ['Active devices', s.devices]].map(([l, v]) => `<div class="stat"><div class="l">${l}</div><div class="v">${v}</div></div>`).join('')
   }
   async function loadPlans() {
     const { plans } = await api('/plans')
@@ -98,6 +100,19 @@
     tr.querySelectorAll('[data-k]').forEach((i) => (body[i.dataset.k] = i.type === 'checkbox' ? i.checked : i.type === 'number' ? (i.value === '' ? null : Number(i.value)) : i.value))
     try { await api('/plans/' + id, { method: 'PATCH', body }); toast('Plan saved'); loadPlans() } catch (e) { toast(e.message) }
   }
+  async function loadRequests() {
+    const { requests } = await api('/requests')
+    const open = requests.filter((r) => r.status === 'new').length
+    $('#reqCount').textContent = open ? open + ' new' : ''
+    $('#requests').innerHTML = requests.map((r) => `<tr><td>${esc(r.created_at)}</td><td>${esc(r.name)}<div class="muted">${esc(r.email)} ${esc(r.phone || '')}</div></td><td>${esc(r.plan_code)}</td><td class="muted">${esc(r.message || '')}</td><td><span class="pill ${r.status === 'fulfilled' ? 'active' : r.status === 'dismissed' ? '' : 'suspended'}">${esc(r.status)}</span>${r.license_key ? `<div class="mono muted">${esc(r.license_key)}</div>` : ''}</td><td class="row">${r.status === 'new' ? `<button class="primary" onclick="issueFor(${r.id})">Issue license &amp; email key</button><button onclick="dismissReq(${r.id})">Dismiss</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No requests yet.</td></tr>'
+    window._requests = requests
+  }
+  window.issueFor = async (id) => {
+    const r = window._requests.find((x) => x.id === id)
+    if (!confirm(`Issue a ${r.plan_code} license to ${r.email}? Do this after payment is confirmed.`)) return
+    try { const x = await api('/licenses', { method: 'POST', body: { planCode: r.plan_code, customerName: r.name, customerEmail: r.email, requestId: id, sendEmail: true } }); toast('Issued ' + x.licenseKey + ' and emailed it'); loadRequests(); loadLicenses(); loadStats() } catch (e) { toast(e.message) }
+  }
+  window.dismissReq = async (id) => { try { await api(`/requests/${id}/status`, { method: 'POST', body: { status: 'dismissed' } }); loadRequests() } catch (e) { toast(e.message) } }
   async function loadLicenses() {
     const { licenses } = await api('/licenses?search=' + encodeURIComponent($('#search').value))
     $('#licenses').innerHTML = licenses.map((l) => `<tr><td class="mono">${esc(l.license_key)}</td><td>${esc(l.customer_name || '')}<div class="muted">${esc(l.customer_email || '')}</div></td><td>${esc(l.plan_name)}</td><td><span class="pill ${esc(l.effective_status)}">${esc(l.effective_status)}</span></td><td>${fmt(l.expires_at)}</td><td>${l.devices}/${l.max_devices}</td><td class="row"><button onclick="openLicense(${l.id})">Manage</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted">No licenses yet.</td></tr>'
@@ -125,7 +140,7 @@
   window.deact = async (aid, id) => { try { await api('/activations/' + aid, { method: 'DELETE' }); toast('Device deactivated'); openLicense(id); loadLicenses(); loadStats() } catch (e) { toast(e.message) } }
   async function boot() {
     $('#login').classList.add('hidden'); $('#appView').classList.remove('hidden'); $('#logout').classList.remove('hidden')
-    try { await Promise.all([loadStats(), loadPlans(), loadLicenses()]) } catch (e) { toast(e.message) }
+    try { await Promise.all([loadStats(), loadPlans(), loadLicenses(), loadRequests()]) } catch (e) { toast(e.message) }
   }
   if (token) boot()
 </script>

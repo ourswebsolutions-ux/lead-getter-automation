@@ -81,9 +81,6 @@ export const SECRET_KEYS = {
   googleCseKey: 'integrations.google_cse_key',
   googleCseCx: 'integrations.google_cse_cx',
   apollo: 'integrations.apollo_key',
-  listenNotes: 'integrations.listennotes_key',
-  spotifyId: 'integrations.spotify_client_id',
-  spotifySecret: 'integrations.spotify_client_secret',
   reacher: 'integrations.reacher_secret'
 } as const
 export type SecretName = keyof typeof SECRET_KEYS

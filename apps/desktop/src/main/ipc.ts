@@ -20,7 +20,6 @@ import * as license from './services/license'
 import { testPlacesKey, MAJOR_CITIES } from './services/sources/googleMaps'
 import { testCse } from './services/sources/linkedin'
 import { testApollo } from './services/sources/apollo'
-import { searchSpotify, searchListenNotes } from './services/sources/podcasts'
 import { SECRET_KEYS, type SecretName } from '@shared/settings'
 
 const log = logger('ipc')
@@ -65,8 +64,6 @@ const handlers: Record<string, Handler> = {
       case 'googlePlaces': return testPlacesKey(need('googlePlaces'))
       case 'googleCse': return testCse(need('googleCseKey'), need('googleCseCx'))
       case 'apollo': return testApollo(need('apollo'))
-      case 'listenNotes': await searchListenNotes(need('listenNotes'), 'business', 0); return 'Connected to Listen Notes.'
-      case 'spotify': await searchSpotify(need('spotifyId'), need('spotifySecret'), 'business', 0, 'US'); return 'Connected to Spotify.'
       case 'reacher': return verification.testReacher()
       default: throw new Error('Unknown integration')
     }
@@ -262,6 +259,8 @@ const handlers: Record<string, Handler> = {
   'license:validate': () => license.validate(),
   'license:deactivate': () => license.deactivate(),
   'license:plans': () => license.plans(),
+  'license:startTrial': () => license.startTrial(),
+  'license:requestPlan': (input) => license.requestPlan(input),
 
   // ------------------------------------------------------------ data control
   'data:wipe': (confirm: string) => {

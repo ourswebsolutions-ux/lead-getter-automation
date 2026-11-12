@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Sun, Moon, Monitor, KeyRound, CheckCircle2, XCircle, Trash2, FolderOpen, ShieldCheck } from 'lucide-react'
+import { Sun, Moon, Monitor, KeyRound, CheckCircle2, XCircle, Trash2, FolderOpen, ShieldCheck, Ban, Plus } from 'lucide-react'
 import { rpc, useAction, useQuery } from '../lib/rpc'
 import { useNav } from '../lib/nav'
 import { applyTheme } from '../lib/theme'
-import { Button, Card, Field, Input, PageHeader, Segmented, SwitchRow, Tabs, Textarea, Callout, confirmDialog } from '../components/ui'
+import { fmtDate } from '../lib/format'
+import { Button, Card, Field, Input, PageHeader, Segmented, SwitchRow, Tabs, Textarea, Callout, confirmDialog, EmptyState } from '../components/ui'
 
 type Tab = 'general' | 'integrations' | 'verification' | 'compliance' | 'data'
 
@@ -37,7 +38,7 @@ export function SettingsPage() {
         )}
         {tab === 'integrations' && <Integrations s={s} save={save} />}
         {tab === 'verification' && <VerificationSettings s={s} save={save} />}
-        {tab === 'compliance' && <Compliance s={s} save={save} />}
+        {tab === 'compliance' && <><Compliance s={s} save={save} /><div className="mt-16"><Suppression /></div></>}
         {tab === 'data' && <DataPrivacy />}
       </div>
     </div>
@@ -47,9 +48,7 @@ export function SettingsPage() {
 const INTEGRATIONS: { test: string; title: string; desc: string; fields: { name: string; label: string; secret?: boolean }[]; link: string }[] = [
   { test: 'googlePlaces', title: 'Google Places API', desc: 'Google Maps lead discovery. Enable “Places API (New)” in Google Cloud and create an API key.', fields: [{ name: 'googlePlaces', label: 'API key', secret: true }], link: 'https://console.cloud.google.com/google/maps-apis' },
   { test: 'googleCse', title: 'Google Programmable Search', desc: 'LinkedIn discovery from public pages. Create a search engine (search the entire web) and a Custom Search JSON API key.', fields: [{ name: 'googleCseKey', label: 'API key', secret: true }, { name: 'googleCseCx', label: 'Search engine ID (cx)' }], link: 'https://programmablesearchengine.google.com/' },
-  { test: 'apollo', title: 'Apollo.io', desc: 'Company and contact search plus enrichment. Use a master API key from Apollo settings.', fields: [{ name: 'apollo', label: 'API key', secret: true }], link: 'https://app.apollo.io/#/settings/integrations/api' },
-  { test: 'listenNotes', title: 'Listen Notes', desc: 'Podcast search. Contact emails require a paid Listen Notes plan.', fields: [{ name: 'listenNotes', label: 'API key', secret: true }], link: 'https://www.listennotes.com/api/' },
-  { test: 'spotify', title: 'Spotify Web API', desc: 'Podcast show search. Create an app in the Spotify developer dashboard.', fields: [{ name: 'spotifyId', label: 'Client ID' }, { name: 'spotifySecret', label: 'Client secret', secret: true }], link: 'https://developer.spotify.com/dashboard' }
+  { test: 'apollo', title: 'Apollo.io', desc: 'Company and contact search plus enrichment. Use a master API key from Apollo settings.', fields: [{ name: 'apollo', label: 'API key', secret: true }], link: 'https://app.apollo.io/#/settings/integrations/api' }
 ]
 
 function Integrations({ s, save }: { s: any; save: (p: any, m?: string) => Promise<any> }) {
@@ -182,3 +181,28 @@ function DataPrivacy() {
   )
 }
 
+
+function Suppression() {
+  const [channel, setChannel] = useState<'email' | 'whatsapp'>('email')
+  const [addr, setAddr] = useState('')
+  const { data, reload } = useQuery<any[]>('suppression:list', [channel])
+  const { run } = useAction()
+  return (
+    <Card title={<span className="row"><Ban size={14} /> Do-not-contact list</span>} sub="Opt-outs, hard bounces, invalid addresses and manual blocks — never contacted again." actions={<Segmented value={channel} onChange={setChannel} options={[{ value: 'email', label: 'Email' }, { value: 'whatsapp', label: 'WhatsApp' }]} />} tight>
+      <form className="toolbar" onSubmit={(e) => { e.preventDefault(); run('a', () => rpc('suppression:add', channel, addr, 'Manual'), { success: 'Added' }).then(() => { setAddr(''); reload() }) }}>
+        <Input value={addr} onChange={(e) => setAddr(e.target.value)} placeholder={channel === 'email' ? 'email@domain.com' : 'Phone with country code, digits only'} style={{ width: 320 }} />
+        <Button type="submit" icon={<Plus size={14} />} disabled={!addr.trim()}>Add</Button>
+      </form>
+      {!data?.length ? <EmptyState title="Nothing blocked yet" /> : (
+        <div style={{ maxHeight: 360, overflow: 'auto' }}>
+          <table className="tbl compact">
+            <thead><tr><th>Address</th><th>Reason</th><th>Added</th><th /></tr></thead>
+            <tbody>{data.map((x) => (
+              <tr key={x.address}><td className="mono">{x.address}</td><td>{x.reason}</td><td className="faint">{fmtDate(x.created_at, true)}</td><td style={{ textAlign: 'right' }}><Button size="sm" variant="ghost" iconOnly icon={<Trash2 size={13} />} title="Remove" onClick={() => run('r', () => rpc('suppression:remove', channel, x.address)).then(reload)} /></td></tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  )
+}

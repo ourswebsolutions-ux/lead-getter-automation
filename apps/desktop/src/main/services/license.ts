@@ -27,7 +27,7 @@ export interface LicensePayload {
   customer?: string
 }
 
-export type LicenseState = 'active' | 'expired' | 'inactive' | 'invalid' | 'offline_grace_exceeded'
+export type LicenseState = 'active' | 'trial' | 'trial_expired' | 'expired' | 'inactive' | 'invalid' | 'offline_grace_exceeded'
 
 function machineSource(): string {
   try {
@@ -81,11 +81,13 @@ export function licenseStatus() {
     lastValidatedAt: row?.last_validated_at ?? null,
     lastError: row?.last_error ?? null
   }
-  if (!row?.token) return { ...base, state: 'inactive' as LicenseState, plan: null, planName: null, expiresAt: null }
+  if (!row?.token) return { ...base, state: (row?.status === 'trial_used' ? 'trial_expired' : 'inactive') as LicenseState, plan: null, planName: null, expiresAt: null }
   const p = verifyToken(row.token)
   if (!p || p.device !== deviceId()) return { ...base, state: 'invalid' as LicenseState, plan: null, planName: null, expiresAt: null }
   if (row.status === 'revoked' || row.status === 'suspended') return { ...base, state: 'inactive' as LicenseState, plan: p.plan, planName: p.planName, expiresAt: p.exp }
-  if (p.exp && Date.parse(p.exp) < Date.now()) return { ...base, state: 'expired' as LicenseState, plan: p.plan, planName: p.planName, expiresAt: p.exp }
+  const isTrial = p.plan === 'trial'
+  if (p.exp && Date.parse(p.exp) < Date.now()) return { ...base, state: (isTrial ? 'trial_expired' : 'expired') as LicenseState, plan: p.plan, planName: p.planName, expiresAt: p.exp }
+  if (isTrial) return { ...base, state: 'trial' as LicenseState, plan: p.plan, planName: p.planName, expiresAt: p.exp }
   const lastOk = row.last_validated_at ? Date.parse(row.last_validated_at + 'Z') : 0
   if (Date.now() - lastOk > OFFLINE_GRACE_DAYS * 86400_000)
     return { ...base, state: 'offline_grace_exceeded' as LicenseState, plan: p.plan, planName: p.planName, expiresAt: p.exp }
@@ -93,7 +95,8 @@ export function licenseStatus() {
 }
 
 export function isLicensed(): boolean {
-  return !ENFORCED || licenseStatus().state === 'active'
+  const st = licenseStatus().state
+  return !ENFORCED || st === 'active' || st === 'trial'
 }
 
 async function post(path: string, body: unknown): Promise<any> {
@@ -109,7 +112,7 @@ async function post(path: string, body: unknown): Promise<any> {
   return json
 }
 
-function store(key: string, token: string, status: string) {
+function store(key: string | null, token: string, status: string) {
   const p = verifyToken(token)
   if (!p) throw new Error('The license server returned a token that failed signature verification. Check the app’s public key configuration.')
   if (p.device !== deviceId()) throw new Error('License token is bound to a different device.')
@@ -128,9 +131,35 @@ export async function activate(licenseKey: string) {
   return licenseStatus()
 }
 
+/** Starts (or restores) this device's free trial. One trial per device, enforced by the server. */
+export async function startTrial() {
+  const row = db().get<any>('SELECT license_key, token FROM license_state WHERE id = 1')
+  if (row?.license_key) return licenseStatus()
+  try {
+    const r = await post('/api/v1/trial', { deviceId: deviceId(), deviceName: os.hostname() })
+    store(null, r.token, 'trial')
+  } catch (e: any) {
+    if (e.code === 'trial_used') db().run("UPDATE license_state SET status = 'trial_used', last_error = NULL WHERE id = 1")
+    else db().run('UPDATE license_state SET last_error = ? WHERE id = 1', `Could not start the free trial: ${e.message}`)
+    bus.publish('license:changed', licenseStatus())
+  }
+  return licenseStatus()
+}
+
+/** Sends a plan request; the server emails it to the vendor (SMTP) and acknowledges to the customer. */
+export async function requestPlan(input: { planCode: string; name: string; email: string; phone?: string; message?: string }) {
+  if (!input.name?.trim()) throw new Error('Please enter your name.')
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email ?? '')) throw new Error('Please enter a valid email address.')
+  return post('/api/v1/purchase-requests', { ...input, deviceId: deviceId() })
+}
+
 export async function validate(): Promise<ReturnType<typeof licenseStatus>> {
   const row = db().get<any>('SELECT license_key, token FROM license_state WHERE id = 1')
-  if (!row?.license_key) return licenseStatus()
+  if (!row?.license_key) {
+    // No paid license yet: start the free trial on first run (no-op if a trial token already exists).
+    if (!row?.token) return startTrial()
+    return licenseStatus()
+  }
   try {
     const r = await post('/api/v1/licenses/validate', { licenseKey: row.license_key, deviceId: deviceId() })
     store(row.license_key, r.token, r.status)

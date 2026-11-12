@@ -1,11 +1,12 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import {
-  LayoutDashboard, MapPin, Briefcase, Rocket, Globe, Mic, MailCheck, Users, Bot, Smartphone, Send, AtSign, Mails,
-  MessagesSquare, BarChart3, Settings, KeyRound, Bell, ChevronLeft, ChevronRight, ChevronRight as Chev, Search, RefreshCw
+  LayoutDashboard, MapPin, Briefcase, Rocket, MailCheck, Users, Bot, Smartphone, Send, AtSign, Mails,
+  MessagesSquare, Settings, Bell, ChevronLeft, ChevronRight, ChevronRight as Chev, Search, RefreshCw
 } from 'lucide-react'
 import { useNav, type PageId } from '../lib/nav'
 import { useQuery } from '../lib/rpc'
 import { initials } from '../lib/format'
+import { openSubscription } from './Subscription'
 
 interface Item {
   id: PageId
@@ -45,8 +46,6 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           { id: 'maps', label: 'Google Maps Leads', icon: ic(MapPin) },
           { id: 'linkedin', label: 'LinkedIn Leads', icon: ic(Briefcase) },
           { id: 'apollo', label: 'Apollo Leads', icon: ic(Rocket) },
-          { id: 'website', label: 'Website Emails', icon: ic(Globe) },
-          { id: 'podcasts', label: 'Podcast Leads', icon: ic(Mic) },
           { id: 'verification', label: 'Email Verification', icon: ic(MailCheck) }
         ]
       },
@@ -64,9 +63,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         title: 'General',
         short: 'General',
         items: [
-          { id: 'analytics', label: 'Analytics & Reports', icon: ic(BarChart3) },
-          { id: 'settings', label: 'Settings', icon: ic(Settings) },
-          { id: 'license', label: 'License & Subscription', icon: ic(KeyRound) }
+          { id: 'settings', label: 'Settings', icon: ic(Settings) }
         ]
       }
     ],
@@ -79,7 +76,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
     .filter((s) => s.items.length)
 
   const company = settings?.company?.name || 'Your workspace'
-  const planLabel = lic?.state === 'active' ? `${lic.planName ?? 'Active'} plan` : lic?.enforced === false ? 'Developer build' : 'Not activated'
+  const planLabel = lic?.state === 'active' ? `${lic.planName ?? 'Active'} plan` : lic?.state === 'trial' ? 'Free trial' : lic?.enforced === false ? 'Developer build' : lic?.state === 'trial_expired' ? 'Trial ended' : 'Subscribe'
   const bell = (counts?.pendingApprovals ?? 0) + (counts?.unread ?? 0)
 
   const hover = (e: React.MouseEvent, text: string) => collapsed && setTip({ text, y: (e.currentTarget as HTMLElement).getBoundingClientRect().top + 9 })
@@ -105,7 +102,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         )}
       </div>
       <div className="sb-divider" />
-      <div className="sb-account" onClick={() => go('license')} onMouseEnter={(e) => hover(e, company)} onMouseLeave={() => setTip(null)}>
+      <div className="sb-account" onClick={openSubscription} onMouseEnter={(e) => hover(e, company)} onMouseLeave={() => setTip(null)}>
         <div className="sb-avatar">{initials(company)}</div>
         {!collapsed && (
           <>

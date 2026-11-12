@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Users, MailCheck, MailWarning, MailX, Sparkles, Smartphone, AtSign, Send, Mails, Inbox, Bot, ClipboardCheck, ArrowUpRight } from 'lucide-react'
+import { Users, MailCheck, MailWarning, MailX, Sparkles, Smartphone, AtSign, Send, Mails, Inbox, Bot, ClipboardCheck } from 'lucide-react'
 import { useQuery } from '../lib/rpc'
 import { useNav } from '../lib/nav'
 import { fmtNum, pct, fmtRelative } from '../lib/format'
@@ -131,7 +131,7 @@ export function Dashboard() {
         </div>
 
         <div className="grid-3 mt-16" style={{ gridTemplateColumns: '2fr 1fr' }}>
-          <Card title="Campaign performance" sub="Most recent campaigns" tight actions={<Button size="sm" variant="ghost" icon={<ArrowUpRight size={14} />} onClick={() => go('analytics')}>Reports</Button>}>
+          <Card title="Campaign performance" sub="Most recent campaigns" tight>
             {!data?.campaigns?.length ? (
               <EmptyState icon={<Send size={20} />} title="No campaigns yet" desc="Create a WhatsApp or email campaign to start reaching your leads." action={<Button onClick={() => go('wa-campaigns')}>Create campaign</Button>} />
             ) : (

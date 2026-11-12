@@ -8,7 +8,6 @@ import { queueVerification } from './verification'
 import { buildQueries, mapPlace, searchPlacesPage, type MapsSearchParams } from './sources/googleMaps'
 import { buildLinkedInQuery, parseLinkedInItem, searchLinkedInPage, type LinkedInSearchParams } from './sources/linkedin'
 import { searchApollo, enrichPerson, type ApolloSearchParams } from './sources/apollo'
-import * as pod from './sources/podcasts'
 import { crawlSite } from './sources/website'
 import { SECRET_KEYS } from '@shared/settings'
 import type { LeadInput } from '@shared/types'
@@ -188,57 +187,6 @@ export function registerDiscoveryJobs(): void {
     }
   )
 
-  // ------------------------------------------------------------ Podcasts
-  registerJob<
-    { platforms: pod.PodcastPlatform[]; keywords: string[]; country: string; maxPerPlatform: number; rssLookup: boolean },
-    { done: string[]; stats: Stats }
-  >(
-    'discover_podcasts',
-    async (ctx) => {
-      const p = ctx.params
-      const stats = ctx.state?.stats ?? emptyStats()
-      const done = new Set(ctx.state?.done ?? [])
-      if (!ctx.state) startHistory('podcast', p, ctx.id)
-      const units = p.platforms.flatMap((pl) => p.keywords.map((k) => `${pl}|${k}`))
-      for (const unit of units) {
-        if (done.has(unit)) continue
-        ctx.throwIfInterrupted()
-        const [platform, q] = unit.split('|') as [pod.PodcastPlatform, string]
-        ctx.progress(done.size, units.length, `${platform}: “${q}”`)
-        let shows: pod.PodcastShow[] = []
-        try {
-          shows = await collectShows(platform, q, p, ctx)
-        } catch (e: any) {
-          ctx.log('error', `${platform}: ${e.message}`)
-        }
-        await pool(shows, 4, ctx, async (s) => {
-          if (p.rssLookup && !s.emails.length) {
-            const rss = s.rss ?? (platform !== 'apple' ? await pod.findRssByTitle(s.title, ctx.signal) : null)
-            if (rss) {
-              try {
-                const info = await pod.readRss(rss, ctx.signal)
-                s.emails.push(...info.emails)
-                s.publisher ??= info.owner
-                s.website ??= info.link
-                s.rss = rss
-              } catch {
-                /* feed unavailable */
-              }
-            }
-          }
-          ingest(pod.showToLead(s), stats)
-        })
-        ctx.log('info', `${platform} “${q}”: ${shows.length} shows`)
-        done.add(unit)
-        ctx.checkpoint({ done: [...done], stats })
-      }
-      finishHistory(ctx.id, stats)
-      afterIngest(stats, ctx)
-      return { found: stats.found, created: stats.created, merged: stats.merged, emails: stats.emails }
-    },
-    { concurrency: 1 }
-  )
-
   // ------------------------------------------------------------ Website email extraction
   registerJob<{ urls: string[]; leadIds?: number[]; maxPages?: number }, { done: string[]; stats: Stats; results: any[] }>(
     'extract_websites',
@@ -323,56 +271,11 @@ export function registerDiscoveryJobs(): void {
   )
 }
 
-async function collectShows(
-  platform: pod.PodcastPlatform,
-  q: string,
-  p: { country: string; maxPerPlatform: number },
-  ctx: JobContext
-): Promise<pod.PodcastShow[]> {
-  const max = Math.max(1, Math.min(p.maxPerPlatform, 500))
-  const out: pod.PodcastShow[] = []
-  if (platform === 'listennotes') {
-    const key = secrets.get(SECRET_KEYS.listenNotes)
-    if (!key) throw new Error('Listen Notes API key is not configured.')
-    let offset: number | null = 0
-    while (offset !== null && out.length < max) {
-      const r = await pod.searchListenNotes(key, q, offset, ctx.signal)
-      out.push(...r.shows)
-      offset = r.next
-    }
-  } else if (platform === 'spotify') {
-    const id = secrets.get(SECRET_KEYS.spotifyId)
-    const secret = secrets.get(SECRET_KEYS.spotifySecret)
-    if (!id || !secret) throw new Error('Spotify client ID and secret are not configured.')
-    let offset: number | null = 0
-    while (offset !== null && out.length < max) {
-      const r = await pod.searchSpotify(id, secret, q, offset, p.country, ctx.signal)
-      out.push(...r.shows)
-      offset = r.next
-    }
-  } else if (platform === 'deezer') {
-    let index: number | null = 0
-    while (index !== null && out.length < max) {
-      const r = await pod.searchDeezer(q, index, ctx.signal)
-      out.push(...r.shows)
-      index = r.next
-    }
-  } else if (platform === 'apple') {
-    out.push(...(await pod.searchApple(q, p.country, ctx.signal)))
-  } else if (platform === 'playerfm') {
-    out.push(...(await pod.searchPlayerFm(q, max, ctx.signal)))
-  } else if (platform === 'pandora') {
-    out.push(...(await pod.searchPandora(q, ctx.signal)))
-  }
-  return out.slice(0, max)
-}
-
 export function startDiscovery(source: string, params: any): { id: string; existing: boolean } {
   const map: Record<string, [string, (p: any) => string]> = {
     google_maps: ['discover_google_maps', (p) => `Google Maps: ${p.keywords.join(', ')}${p.locations.length ? ' — ' + p.locations.slice(0, 3).join(', ') : ''}`],
     linkedin: ['discover_linkedin', (p) => `LinkedIn ${p.mode}: ${[p.keywords, ...p.jobTitles].filter(Boolean).join(', ') || 'search'}`],
     apollo: ['discover_apollo', (p) => `Apollo ${p.mode}: ${[p.keywords, ...p.jobTitles].filter(Boolean).join(', ') || 'search'}`],
-    podcasts: ['discover_podcasts', (p) => `Podcasts: ${p.keywords.join(', ')}`],
     website: ['extract_websites', (p) => `Website extraction: ${p.urls.length + (p.leadIds?.length ?? 0)} sites`]
   }
   const m = map[source]

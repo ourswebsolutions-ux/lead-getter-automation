@@ -1,5 +1,7 @@
 # Testing report — 12 Nov 2026
 
+> Updated after removing Analytics, Podcasts, Website Emails and the License page, and adding the free trial + top-bar subscription popup.
+
 ## How to run
 
 ```bash
@@ -13,9 +15,9 @@ cd apps/license-server && npm test                       # 7 API tests
 | Suite | Result |
 |---|---|
 | Desktop typecheck (main + renderer, TypeScript 7) | ✅ clean |
-| Desktop unit/integration (`vitest`) | ✅ 40 / 40 |
-| Desktop live (`test:live`) | ✅ 5 / 5 |
-| License server (`node --test`) | ✅ 7 / 7 |
+| Desktop unit/integration (`vitest`) | ✅ 44 / 44 |
+| Desktop live (`test:live`) | ✅ 3 / 3 |
+| License server (`node --test`) | ✅ 9 / 9 |
 | Production build (`electron-vite build`) | ✅ |
 | Linux installers (AppImage, .deb) | ✅ built; packaged binary launched, created its own database and ran migrations |
 | Visual QA | ✅ real Electron window, 12 pages × light/dark captured and reviewed |
@@ -30,7 +32,7 @@ Legend: ✅ verified · 🧪 verified with a local stand-in for the external ser
 | 2 | LinkedIn | 🧪 ⚠️ | Query building and result parsing tested. Needs Google Programmable Search key + cx. |
 | 3 | Apollo | 🧪 ⚠️ | Person/company mapping, placeholder-email filtering tested. Needs an Apollo API key. |
 | 4 | Website email extraction | ✅ | Local test site (mailto, Cloudflare-encoded, obfuscated emails, tel:, robots.txt disallow, socials) + live crawl of a public website. |
-| 5 | Podcasts | ✅ / ⚠️ | Live: Apple Podcasts search + RSS owner emails found. Deezer's public API currently rejects podcast queries (error 600) — handled with a clear message. Listen Notes & Spotify need keys; Player FM & Pandora are best-effort page readers, not live-verified. |
+| 5 | Podcasts | — | Removed from the product (12 Nov 2026). |
 | 6 | Duplicate detection | ✅ | Cross-source merge by domain/phone, social-media URLs not merged, edited fields preserved, manual merge. |
 | 7 | Categorisation | ✅ | Keyword rules + custom categories. |
 | 8 | Advanced filters | ✅ | Country, city, category, source, verification, website/phone/email presence, tags, campaign status, date range, search — all against SQLite. |
@@ -49,7 +51,7 @@ Legend: ✅ verified · 🧪 verified with a local stand-in for the external ser
 | 22 | Email campaigns | 🧪 | Recipients, skip reasons, sending, pause/resume/stop, cross-campaign dedupe, suppression, daily limits. |
 | 23 | Email follow-ups | 🧪 | Scheduled follow-ups, `Re:` threading, stop on reply, completion. |
 | 24 | Conversation history | ✅ | Inbound/outbound recording, duplicate delivery ignored, opt-out handling. |
-| 25 | Subscription activation | ✅ | Desktop client ↔ real license server over HTTP: activate, validate, deactivate, device limit, tamper detection. |
+| 25 | Subscription activation | ✅ | Desktop client ↔ real license server: automatic 2-day trial, trial cannot be restarted after reinstall, plan request, key activation, validate, deactivate, device limit, tamper detection. |
 | 26 | Subscription expiration | ✅ | Expired → 410, revocation reflected on next validation, renewal extends from current expiry. |
 | 27–28 | Light / dark mode | ✅ | Screenshots of every major page in both themes. |
 | 29 | Database persistence | ✅ | Migrations, WAL, job checkpoint recovery after simulated crash, packaged app DB creation. |

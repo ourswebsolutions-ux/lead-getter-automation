@@ -72,6 +72,26 @@ CREATE TABLE IF NOT EXISTS notifications (
   error TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS trials (
+  id INTEGER PRIMARY KEY,
+  device_id TEXT NOT NULL UNIQUE,      -- one free trial per device
+  device_name TEXT,
+  ip TEXT,
+  started_at TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS purchase_requests (
+  id INTEGER PRIMARY KEY,
+  plan_code TEXT NOT NULL,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  phone TEXT,
+  message TEXT,
+  device_id TEXT,
+  status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','fulfilled','dismissed')),
+  license_id INTEGER REFERENCES licenses(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `
 
 // Default packages. Prices, durations, device limits and features are editable from the admin API/UI.

@@ -53,6 +53,18 @@ export function createApp(config) {
   }
 
   const mailer = config.smtpUrl ? nodemailer.createTransport(config.smtpUrl) : null
+  const trialDays = Number(config.trialDays ?? 2)
+  const adminNotifyEmail = config.adminNotifyEmail || config.adminEmail
+  async function sendMail(to, subject, text) {
+    if (!mailer || !to) return 'skipped'
+    try {
+      await mailer.sendMail({ from: config.mailFrom, to, subject, text })
+      return 'sent'
+    } catch (e) {
+      console.error('Mail failed:', e.message)
+      return 'failed'
+    }
+  }
   const event = (licenseId, ev, detail, actor = 'system') =>
     db.prepare('INSERT INTO license_events (license_id, event, detail, actor) VALUES (?, ?, ?, ?)').run(licenseId, ev, detail ? JSON.stringify(detail) : null, actor)
 
@@ -176,6 +188,39 @@ export function createApp(config) {
     if (r.changes) event(l.id, 'deactivated', { deviceId, by: 'device' })
     res.json({ ok: true })
   })
+
+  // Free trial: one per device, signed exactly like a license token (plan "trial").
+  pub.post('/trial', (req, res) => {
+    const deviceId = deviceIdOf(req.body.deviceId)
+    let t = db.prepare('SELECT * FROM trials WHERE device_id = ?').get(deviceId)
+    if (!t) {
+      const exp = new Date(Date.now() + trialDays * 86400_000).toISOString().replace('T', ' ').slice(0, 19)
+      db.prepare('INSERT INTO trials (device_id, device_name, ip, expires_at) VALUES (?, ?, ?, ?)').run(deviceId, str(req.body.deviceName), req.ip, exp)
+      t = db.prepare('SELECT * FROM trials WHERE device_id = ?').get(deviceId)
+    }
+    const expiresAt = toIso(t.expires_at)
+    if (Date.parse(expiresAt) < Date.now()) throw new ApiError(410, 'The free trial on this device has ended. Choose a plan to continue.', 'trial_used')
+    const token = signToken(privateKey, { lid: `trial:${t.id}`, plan: 'trial', planName: `${trialDays}-day free trial`, device: deviceId, exp: expiresAt, iat: new Date().toISOString() })
+    res.json({ status: 'trial', token, expiresAt })
+  })
+
+  // Customer picks a plan in the app → stored, admin is emailed, customer gets an acknowledgement.
+  pub.post('/purchase-requests', rateLimit('purchase', 5, 60 * 60_000), async (req, res) => {
+    const plan = db.prepare('SELECT * FROM plans WHERE code = ? AND active = 1').get(String(req.body.planCode ?? ''))
+    if (!plan) throw new ApiError(400, 'Unknown plan')
+    const name = String(req.body.name ?? '').trim()
+    const email = String(req.body.email ?? '').trim().toLowerCase()
+    if (!name) throw new ApiError(400, 'Name is required')
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ApiError(400, 'A valid email is required')
+    const id = Number(db.prepare('INSERT INTO purchase_requests (plan_code, name, email, phone, message, device_id) VALUES (?,?,?,?,?,?)')
+      .run(plan.code, name.slice(0, 200), email, str(req.body.phone, 50), str(req.body.message, 1000), req.body.deviceId ? deviceIdOf(req.body.deviceId) : null).lastInsertRowid)
+    const price = `${plan.currency} ${plan.price.toLocaleString('en-US')}`
+    await sendMail(adminNotifyEmail, `New subscription request: ${plan.name} — ${name}`,
+      `New request #${id}\n\nPlan: ${plan.name} (${price} / ${plan.duration_label})\nName: ${name}\nEmail: ${email}\nPhone: ${req.body.phone ?? '-'}\nMessage: ${req.body.message ?? '-'}\n\nIssue the license from the admin console (Requests → Issue license); the key is emailed to the customer automatically.`)
+    await sendMail(email, `We received your request for ${plan.name}`,
+      `Hello ${name},\n\nThanks for choosing ${plan.name} (${price} / ${plan.duration_label}). We'll contact you with payment details, and your license key will be emailed to this address once confirmed.\n\nTo activate: click the subscription button at the top of the app → paste the key → Activate.\n`)
+    res.status(201).json({ ok: true, id, emailed: !!mailer })
+  })
   app.use('/api/v1', pub)
 
   // ------------------------------------------------------------ admin API
@@ -198,6 +243,8 @@ export function createApp(config) {
       licenses: one('SELECT COUNT(*) n FROM licenses'),
       active: one("SELECT COUNT(*) n FROM licenses WHERE status = 'active' AND (expires_at IS NULL OR expires_at > datetime('now'))"),
       expired: one("SELECT COUNT(*) n FROM licenses WHERE expires_at IS NOT NULL AND expires_at <= datetime('now')"),
+      trials: one('SELECT COUNT(*) n FROM trials'),
+      newRequests: one("SELECT COUNT(*) n FROM purchase_requests WHERE status = 'new'"),
       devices: one('SELECT COUNT(*) n FROM activations WHERE active = 1'),
       byPlan: db.prepare('SELECT p.name, COUNT(l.id) n FROM plans p LEFT JOIN licenses l ON l.plan_id = p.id GROUP BY p.id ORDER BY p.sort').all()
     })
@@ -252,6 +299,7 @@ export function createApp(config) {
     const id = Number(db.prepare('INSERT INTO licenses (license_key, plan_id, customer_name, customer_email, max_devices, expires_at, notes) VALUES (?,?,?,?,?,?,?)')
       .run(key, plan.id, str(req.body.customerName), email, Math.max(1, Number(req.body.maxDevices ?? plan.max_devices) | 0), expires ? expires.toISOString().replace('T', ' ').slice(0, 19) : null, str(req.body.notes, 2000)).lastInsertRowid)
     event(id, 'created', { plan: plan.code }, `admin:${req.adminId}`)
+    if (req.body.requestId) db.prepare("UPDATE purchase_requests SET status = 'fulfilled', license_id = ? WHERE id = ?").run(id, Number(req.body.requestId))
     const l = db.prepare('SELECT * FROM licenses WHERE id = ?').get(id)
     if (req.body.sendEmail !== false) await notify(l, 'created', `created:${id}`)
     res.status(201).json({ id, licenseKey: key, expiresAt: toIso(l.expires_at) })
@@ -286,6 +334,15 @@ export function createApp(config) {
     db.prepare("UPDATE licenses SET customer_name = ?, customer_email = ?, max_devices = ?, notes = ?, updated_at = datetime('now') WHERE id = ?")
       .run(str(req.body.customerName ?? l.customer_name), str(req.body.customerEmail ?? l.customer_email), Math.max(1, Number(req.body.maxDevices ?? l.max_devices) | 0), str(req.body.notes ?? l.notes, 2000), l.id)
     event(l.id, 'updated', null, `admin:${req.adminId}`)
+    res.json({ ok: true })
+  })
+  admin.get('/requests', (_req, res) => {
+    res.json({ requests: db.prepare("SELECT r.*, l.license_key FROM purchase_requests r LEFT JOIN licenses l ON l.id = r.license_id ORDER BY r.status = 'new' DESC, r.id DESC LIMIT 300").all() })
+  })
+  admin.post('/requests/:id/status', (req, res) => {
+    const status = String(req.body.status)
+    if (!['new', 'fulfilled', 'dismissed'].includes(status)) throw new ApiError(400, 'Invalid status')
+    db.prepare('UPDATE purchase_requests SET status = ? WHERE id = ?').run(status, Number(req.params.id))
     res.json({ ok: true })
   })
   admin.delete('/activations/:id', (req, res) => {

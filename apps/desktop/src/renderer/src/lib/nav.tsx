@@ -1,8 +1,8 @@
 import { createContext, useContext } from 'react'
 
 export type PageId =
-  | 'dashboard' | 'maps' | 'linkedin' | 'apollo' | 'website' | 'podcasts' | 'verification' | 'leads' | 'agent'
-  | 'wa-accounts' | 'wa-campaigns' | 'email-accounts' | 'email-campaigns' | 'conversations' | 'analytics' | 'settings' | 'license'
+  | 'dashboard' | 'maps' | 'linkedin' | 'apollo' | 'verification' | 'leads' | 'agent'
+  | 'wa-accounts' | 'wa-campaigns' | 'email-accounts' | 'email-campaigns' | 'conversations' | 'settings'
 
 export interface Nav {
   page: PageId

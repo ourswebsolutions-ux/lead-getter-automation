@@ -64,6 +64,26 @@ describe('desktop ↔ license server', () => {
     expect((await lic.validate()).state).toBe('inactive')
   })
 
+  it('starts a 2-day free trial on first launch, then a purchased key replaces it', async () => {
+    freshDb()
+    const t = await lic.validate()
+    expect(t.state).toBe('trial')
+    expect(lic.isLicensed()).toBe(true)
+    const days = (Date.parse(t.expiresAt!) - Date.now()) / 86400_000
+    expect(days).toBeGreaterThan(1.9)
+    // Trial used up on the server → app locks and shows "trial ended", even after a reinstall (fresh DB).
+    ctx.db.prepare("UPDATE trials SET expires_at = datetime('now', '-1 minute')").run()
+    freshDb()
+    expect((await lic.validate()).state).toBe('trial_expired')
+    expect(lic.isLicensed()).toBe(false)
+    // A plan request reaches the server, and activating the issued key unlocks the app.
+    const req: any = await lic.requestPlan({ planCode: 'lifetime', name: 'Ali', email: 'ali@shop.pk' })
+    expect(req.ok).toBe(true)
+    const { licenseKey } = await issue('lifetime')
+    expect((await lic.activate(licenseKey)).state).toBe('active')
+    expect(lic.isLicensed()).toBe(true)
+  })
+
   it('rejects malformed keys locally', async () => {
     freshDb()
     await expect(lic.activate('hello')).rejects.toThrow(/LGE-XXXX/)
