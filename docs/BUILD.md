@@ -16,7 +16,7 @@ Output goes to `apps/desktop/release/<version>/`.
 | Target | Where to build | Status in this delivery |
 |---|---|---|
 | Linux AppImage + .deb | Linux | **Built and launched** (`Lead Getter Enterprise-1.0.0.AppImage`, `lead-getter-enterprise_1.0.0_amd64.deb`) |
-| Windows NSIS | Windows (recommended) or Linux with wine | See [TESTING.md](TESTING.md) for the attempt from Linux |
+| Windows NSIS | Windows (recommended) or Linux with wine | App packaged for win32 x64; installer not produced on this machine (no wine) |
 | macOS dmg/zip | **macOS only** (Apple tooling) | Not built — requires a Mac |
 
 Notes:

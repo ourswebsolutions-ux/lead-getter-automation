@@ -53,7 +53,7 @@ Legend: ✅ verified · 🧪 verified with a local stand-in for the external ser
 | 26 | Subscription expiration | ✅ | Expired → 410, revocation reflected on next validation, renewal extends from current expiry. |
 | 27–28 | Light / dark mode | ✅ | Screenshots of every major page in both themes. |
 | 29 | Database persistence | ✅ | Migrations, WAL, job checkpoint recovery after simulated crash, packaged app DB creation. |
-| 30 | Installer startup | ✅ Linux · see below for Windows · macOS needs a Mac | |
+| 30 | Installer startup | ✅ Linux · ⚠️ Windows · ⚠️ macOS | Linux AppImage/.deb built and launched. Windows: app packaged (`win-unpacked`), but the NSIS installer step needs wine, which isn't installed here — build on Windows/CI. macOS requires a Mac. |
 
 ## Issues found and fixed during testing
 
