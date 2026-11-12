@@ -34,7 +34,7 @@ export function SubscriptionButton() {
   const st = lic.state
   const paid = st === 'active'
   const trial = st === 'trial'
-  const label = paid ? lic.planName : trial ? `Free trial · ${timeLeft(lic.expiresAt)}` : st === 'trial_expired' ? 'Trial ended — Subscribe' : st === 'expired' ? 'Expired — Renew' : lic.enforced === false ? 'Developer build' : 'Subscribe'
+  const label = paid ? lic.planName : trial ? `Free trial · ${timeLeft(lic.expiresAt)}` : st === 'trial_expired' ? 'Trial ended — Subscribe' : st === 'expired' ? 'Expired — Renew' : st === 'invalid' ? 'Activate' : lic.enforced === false ? 'Developer build' : 'Subscribe'
   const urgent = !paid && !trial && lic.enforced !== false
   return (
     <>
@@ -96,6 +96,7 @@ function OtpInput({ value, onChange, disabled }: { value: string; onChange: (v: 
 
 function SubscriptionModal({ lic, onClose }: { lic: any; onClose: () => void }) {
   const { data: plans, error } = useQuery<any[]>('license:plans', [])
+  void error
   const shown = plans?.length ? plans : FALLBACK_PLANS
   const [picked, setPicked] = useState<any>(null)
   const [step, setStep] = useState<'plans' | 'details' | 'otp'>('plans')
@@ -110,6 +111,7 @@ function SubscriptionModal({ lic, onClose }: { lic: any; onClose: () => void }) 
     : lic.state === 'trial' ? `Free trial · ${timeLeft(lic.expiresAt)} (ends ${fmtDate(lic.expiresAt, true)})`
     : lic.state === 'trial_expired' ? 'Your free trial has ended. Choose a plan to keep using discovery, verification, AI and campaigns.'
     : lic.state === 'expired' ? `Your subscription expired on ${fmtDate(lic.expiresAt)}.`
+    : lic.state === 'invalid' ? 'Subscription data on this computer could not be verified. Activate a plan to continue.'
     : 'Start with a 2-day free trial, then choose a plan.'
 
   const sendRequest = () =>
@@ -180,18 +182,9 @@ function SubscriptionModal({ lic, onClose }: { lic: any; onClose: () => void }) 
         </div>
       )}
 
-      {step === 'plans' && !done && paid && (
-        <>
-          <div className="sep" />
-          <div className="row">
-            <span className="faint grow" style={{ fontSize: 12.5 }}>To use the app on a different computer, release it here first.</span>
-            <Button size="sm" loading={busy === 'v'} onClick={() => run('v', () => rpc('license:validate'), { success: 'Subscription checked' })}>Check now</Button>
-            <Button size="sm" variant="ghost" onClick={() => run('d', () => rpc('license:deactivate'), { success: 'This computer was released' })}>Move to another computer</Button>
-          </div>
-        </>
+      {step === 'plans' && !done && lic.otpConfigured === false && (
+        <div className="mt-8"><Callout kind="warn">Activation email isn’t set up in this build (SUBSCRIPTION_SMTP_URL). Rebuild the app with apps/desktop/.env filled in.</Callout></div>
       )}
-      {lic.lastError && step === 'plans' && <div className="mt-8"><Callout kind="warn">{lic.lastError}</Callout></div>}
-      {error && step === 'plans' && <div className="faint mt-8" style={{ fontSize: 12 }}>Couldn’t reach the subscription server — showing standard plans.</div>}
       <div className="faint mt-8 row" style={{ fontSize: 11.5 }}>Device ID <span className="mono">{lic.deviceId}</span> <Copy size={11} style={{ cursor: 'pointer' }} onClick={() => toastCopy(lic.deviceId)} /></div>
     </Modal>
   )

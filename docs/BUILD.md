@@ -4,8 +4,7 @@
 cd apps/desktop
 npm ci
 npm run typecheck && npm test
-export LICENSE_SERVER_URL=https://license.yourdomain.com
-export LICENSE_PUBLIC_KEY="$(cd ../license-server && npm run -s print-public-key)"
+cp .env.example .env   # once: SUBSCRIPTION_SMTP_URL, SUBSCRIPTION_OTP_EMAIL, SUBSCRIPTION_SECRET
 npm run dist:linux   # AppImage + .deb
 npm run dist:win     # NSIS installer (.exe)
 npm run dist:mac     # .dmg + .zip

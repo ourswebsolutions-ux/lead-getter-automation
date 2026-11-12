@@ -15,7 +15,7 @@ import { registerAgent } from './services/ai/agent'
 import { registerWhatsApp, restoreSessions, shutdownWhatsApp } from './services/whatsapp'
 import { registerEmail, startInboxPolling, stopInboxPolling } from './services/email'
 import { startCampaignEngine, stopCampaignEngine } from './services/campaigns'
-import { startLicenseChecks, stopLicenseChecks } from './services/license'
+import { initSubscription } from './services/subscription'
 
 // Separate identity from any other "Lead Getter" install: own userData dir, own DB, own sessions.
 app.setName('Lead Getter Enterprise')
@@ -170,7 +170,7 @@ app.whenReady().then(async () => {
   startJobRunner()
   startCampaignEngine()
   startInboxPolling()
-  startLicenseChecks()
+  initSubscription()
   void restoreSessions()
   void setupUpdates()
 
@@ -204,7 +204,6 @@ app.on('before-quit', async (e) => {
   try {
     stopCampaignEngine()
     stopInboxPolling()
-    stopLicenseChecks()
     await stopJobRunner()
     await shutdownWhatsApp()
     db().exec('PRAGMA wal_checkpoint(TRUNCATE)')

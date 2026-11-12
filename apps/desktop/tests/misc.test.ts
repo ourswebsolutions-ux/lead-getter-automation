@@ -1,10 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { generateKeyPairSync, sign } from 'node:crypto'
 import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { freshDb } from './helpers'
-import { verifyToken, deviceId } from '../src/main/services/license'
 import { guessMapping, importLeads, readTable, writeExport, exportRows, safeCell } from '../src/main/services/importExport'
 import { stripQuoted, extractBouncedRecipient } from '../src/main/services/email'
 import { listLeads } from '../src/main/services/leads'
@@ -15,20 +13,6 @@ import { mapPerson } from '../src/main/services/sources/apollo'
 import { db } from '../src/main/db'
 import { redact } from '../src/main/core/logger'
 import { registerVerificationJobs } from '../src/main/services/verification'
-
-describe('license tokens', () => {
-  it('verifies Ed25519-signed tokens and rejects tampering', () => {
-    const { publicKey, privateKey } = generateKeyPairSync('ed25519')
-    const pem = publicKey.export({ type: 'spki', format: 'pem' }).toString()
-    const body = Buffer.from(JSON.stringify({ lid: 'L1', plan: 'lifetime', planName: 'Lifetime', device: deviceId(), exp: null, iat: new Date().toISOString() })).toString('base64url')
-    const token = `${body}.${sign(null, Buffer.from(body, 'base64url'), privateKey).toString('base64url')}`
-    expect(verifyToken(token, pem)?.plan).toBe('lifetime')
-    const forged = Buffer.from(JSON.stringify({ lid: 'L1', plan: 'lifetime', device: 'X', exp: null })).toString('base64url')
-    expect(verifyToken(`${forged}.${token.split('.')[1]}`, pem)).toBeNull()
-    expect(deviceId()).toMatch(/^[0-9A-F]{32}$/)
-    expect(deviceId()).toBe(deviceId())
-  })
-})
 
 describe('secrets vault', () => {
   beforeEach(() => freshDb())

@@ -19,11 +19,10 @@ Channels marked 🔒 require an active license when licensing is enforced.
 | SMTP | `smtp:list`, `smtp:create(account)`, `smtp:update(id, account)`, `smtp:delete(id)`, `smtp:test(id)`, `smtp:sendTest(id, to, subject, body, isHtml)`, `smtp:poll(id)` |
 | Campaigns | `campaigns:list(channel)`, `campaigns:get(id)`, `campaigns:create(channel, name, config, steps)`, `campaigns:update(id, patch)`, `campaigns:delete(id)`, `campaigns:addRecipients(id, {leadIds\|filter})`, `campaigns:removeRecipients`, `campaigns:recipients(id, opts)`, 🔒`campaigns:start(id, scheduledAt?)`, `campaigns:pause`, 🔒`campaigns:resume`, `campaigns:stop`, `campaigns:preview(id, leadId, step)`, `campaigns:defaults(channel)`, `suppression:list/add/remove` |
 | Analytics | `analytics:dashboard({from, to})`, `analytics:sidebar` |
-| License | `license:status`, `license:activate(key)`, `license:validate`, `license:deactivate`, `license:plans`, `license:startTrial`, `license:requestOtp({planCode, name?, phone?})`, `license:verifyOtp(code)` |
+| Subscription | `license:status`, `license:plans`, `license:requestOtp({planCode, name?, phone?})`, `license:verifyOtp(code)` |
 | Data | `data:wipe('DELETE ALL DATA')` |
 
 ## Events (main → renderer)
 
 `job:update`, `job:finished`, `leads:changed`, `verification:progress`, `discovery:progress`, `extraction:page`, `extraction:result`, `conversation:message`, `conversation:updated`, `approval:created`, `approval:updated`, `campaign:updated`, `whatsapp:status`, `whatsapp:qr`, `license:changed`, `update:available`, `notify`, `navigate`.
 
-The license server HTTP API is documented in [LICENSING.md](LICENSING.md).

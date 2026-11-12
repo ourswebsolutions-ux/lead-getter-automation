@@ -435,5 +435,32 @@ INSERT INTO lead_categories (name, color, is_system) VALUES
 INSERT INTO ai_providers (id) VALUES ('openai'), ('anthropic'), ('gemini'), ('groq');
 INSERT INTO users (id, name, role) VALUES (1, 'Owner', 'owner');
 `
+  },
+  {
+    version: 2,
+    name: 'local subscription with emailed OTP (no license server)',
+    sql: `
+CREATE TABLE subscription (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  trial_ends_at TEXT,          -- ISO
+  plan TEXT,                   -- plan code once activated
+  expires_at TEXT,             -- ISO; NULL with a plan = lifetime
+  activated_at TEXT,
+  signature TEXT               -- HMAC over the fields above + device id
+);
+INSERT INTO subscription (id) VALUES (1);
+
+CREATE TABLE subscription_otp (
+  id INTEGER PRIMARY KEY,
+  plan TEXT NOT NULL,
+  code_hash TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','used','replaced','locked')),
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+DROP TABLE IF EXISTS license_state;
+`
   }
 ]

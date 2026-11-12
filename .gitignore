@@ -7,5 +7,4 @@ coverage/
 .env
 .env.*
 !.env.example
-apps/license-server/data/
 .DS_Store

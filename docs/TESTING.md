@@ -1,14 +1,13 @@
 # Testing report — 12 Nov 2026
 
-> Real OTP email sent through Gmail SMTP on 12 Nov 2026 (server accepted, 201).
+> The license server was removed; subscription is now local with emailed OTP.
 > Updated after removing Analytics, Podcasts, Website Emails and the License page, and adding the free trial + top-bar subscription popup.
 
 ## How to run
 
 ```bash
-cd apps/desktop && npm run typecheck && npm test        # 40 unit + integration tests
+cd apps/desktop && npm run typecheck && npm test        # 41 unit + integration tests
 cd apps/desktop && npm run test:live                     # 5 live tests against real public services
-cd apps/license-server && npm test                       # 7 API tests
 ```
 
 ## Results
@@ -18,7 +17,6 @@ cd apps/license-server && npm test                       # 7 API tests
 | Desktop typecheck (main + renderer, TypeScript 7) | ✅ clean |
 | Desktop unit/integration (`vitest`) | ✅ 41 / 41 |
 | Desktop live (`test:live`) | ✅ 3 / 3 |
-| License server (`node --test`) | ✅ 10 / 10 |
 | Production build (`electron-vite build`) | ✅ |
 | Linux installers (AppImage, .deb) | ✅ built; packaged binary launched, created its own database and ran migrations |
 | Visual QA | ✅ real Electron window, 12 pages × light/dark captured and reviewed |
@@ -52,8 +50,8 @@ Legend: ✅ verified · 🧪 verified with a local stand-in for the external ser
 | 22 | Email campaigns | 🧪 | Recipients, skip reasons, sending, pause/resume/stop, cross-campaign dedupe, suppression, daily limits. |
 | 23 | Email follow-ups | 🧪 | Scheduled follow-ups, `Re:` threading, stop on reply, completion. |
 | 24 | Conversation history | ✅ | Inbound/outbound recording, duplicate delivery ignored, opt-out handling. |
-| 25 | Subscription activation | ✅ | Desktop client ↔ real license server: automatic 2-day trial, trial cannot be restarted after reinstall, OTP activation (wrong code, lock after 5, single use, other computer rejected, renewal extends), validate, deactivate, device limit, tamper detection. |
-| 26 | Subscription expiration | ✅ | Expired → 410, revocation reflected on next validation, renewal extends from current expiry. |
+| 25 | Subscription activation | ✅ | Local trial (2 days, survives reinstall), OTP emailed to owner, wrong-code limit (5), single use, activation, renewal extends, lifetime, tamper detection, email failure. Real OTP email sent through Gmail SMTP on 12 Nov 2026. |
+| 26 | Subscription expiration | ✅ | Trial end and plan expiry lock licensed features. |
 | 27–28 | Light / dark mode | ✅ | Screenshots of every major page in both themes. |
 | 29 | Database persistence | ✅ | Migrations, WAL, job checkpoint recovery after simulated crash, packaged app DB creation. |
 | 30 | Installer startup | ✅ Linux · ⚠️ Windows · ⚠️ macOS | Linux AppImage/.deb built and launched. Windows: app packaged (`win-unpacked`), but the NSIS installer step needs wine, which isn't installed here — build on Windows/CI. macOS requires a Mac. |
@@ -61,7 +59,6 @@ Legend: ✅ verified · 🧪 verified with a local stand-in for the external ser
 ## Issues found and fixed during testing
 
 * "Pizza" businesses weren't categorised as restaurants (regex gap).
-* License server looked up a key before validating the device id (could reveal key existence) — input is now validated first.
 * Deezer podcast API change surfaced by the live test — now reported clearly.
 * Large RSS feeds were downloaded in full — now limited to the 512 KB channel header.
 * `electron-updater` dynamic import interop bug found by launching the packaged app.

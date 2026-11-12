@@ -16,7 +16,7 @@ import * as wa from './services/whatsapp'
 import * as email from './services/email'
 import * as campaigns from './services/campaigns'
 import * as analytics from './services/analytics'
-import * as license from './services/license'
+import * as license from './services/subscription'
 import { testPlacesKey, MAJOR_CITIES } from './services/sources/googleMaps'
 import { testCse } from './services/sources/linkedin'
 import { testApollo } from './services/sources/apollo'
@@ -254,12 +254,8 @@ const handlers: Record<string, Handler> = {
   'analytics:sidebar': () => analytics.sidebarCounts(),
 
   // ------------------------------------------------------------ license
-  'license:status': () => license.licenseStatus(),
-  'license:activate': (key: string) => license.activate(key),
-  'license:validate': () => license.validate(),
-  'license:deactivate': () => license.deactivate(),
+  'license:status': () => license.subscriptionStatus(),
   'license:plans': () => license.plans(),
-  'license:startTrial': () => license.startTrial(),
   'license:requestOtp': (input) => license.requestOtp(input),
   'license:verifyOtp': (code: string) => license.verifyOtp(code),
 

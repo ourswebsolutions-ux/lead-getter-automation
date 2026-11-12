@@ -12,7 +12,7 @@ AI-powered lead generation and automated sales platform — a **new, independent
 | Email | Multiple SMTP accounts, IMAP reply & bounce tracking, sequences (initial + 3 follow-ups that stop on reply/unsubscribe/not-interested), suppression list |
 | Inbox | Unified WhatsApp + email conversations, three-panel workspace, approvals inline |
 | Dashboard | Live command center from real records with date ranges |
-| Subscription | 2-day free trial on first launch (one per device). A top-bar button opens the plans popup → **Activate** emails a 4-digit OTP to you (SMTP) → you share it with the customer (e.g. WhatsApp) → they enter it and the plan activates. No license keys. Backend: `apps/license-server` (Ed25519-signed, device-bound, plans PKR 4,500 / 15,000 / 50,000) |
+| Subscription | 2-day free trial on first launch. A top-bar button opens the plans popup → **Activate** emails a 4-digit OTP to the owner's Gmail → share it with the team member (e.g. WhatsApp) → they enter it and the plan activates. No license keys and no server; state is signed and bound to the computer. |
 
 ## Repository layout
 
@@ -23,29 +23,23 @@ apps/desktop/          Electron + React + TypeScript desktop app
   src/renderer/        React UI (design system in styles/global.css)
   src/shared/          Types and settings shared by both processes
   tests/               Unit/integration tests (vitest) + opt-in live tests
-apps/license-server/   Independent licensing backend (Node 22 + Express + SQLite)
 infra/reacher/         Docker Compose for the Reacher verification backend
 design/                Sidebar reference image
 docs/                  Architecture, configuration, deployment and testing docs
 ```
 
-## Quick start (development)
+## Quick start
 
 Requirements: Node.js ≥ 22.13, npm.
 
 ```bash
-# 1. License server (own terminal)
-cd apps/license-server && npm install && cp .env.example .env   # fill SESSION_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD
-npm start                                                        # http://localhost:8787/admin
-
-# 2. Desktop app
-cd apps/desktop && npm install
-LICENSE_PUBLIC_KEY="$(cd ../license-server && npm run -s print-public-key)" npm run dev
+cd apps/desktop
+npm install
+cp .env.example .env     # Gmail App Password + OTP email + a long random secret
+npm run dev
 ```
 
-> `npm run dev` / `npm start` clear `ELECTRON_RUN_AS_NODE` automatically (VS Code terminals set it, which otherwise makes Electron start as plain Node).
-
-Then: the app starts a 2-day trial automatically (top-right button). To test a paid plan: popup → **Activate** → the OTP arrives at `ADMIN_NOTIFY_EMAIL` → enter it in the popup → configure integrations in **Settings** and an AI provider in **AI Sales Agent → AI providers**.
+The app starts a 2-day free trial automatically (top-right button). To activate a plan: popup → **Activate** → the OTP arrives at `SUBSCRIPTION_OTP_EMAIL` → enter it in the popup. Then configure integrations in **Settings** and an AI provider in **AI Sales Agent → AI providers**.
 
 ## Documentation
 
@@ -55,7 +49,7 @@ Then: the app starts a 2-day trial automatically (top-right button). To test a p
 - [WhatsApp / Baileys](docs/WHATSAPP.md)
 - [AI providers](docs/AI_PROVIDERS.md)
 - [SMTP & email campaigns](docs/SMTP.md)
-- [Licensing server & API](docs/LICENSING.md)
+- [Subscription & OTP activation](docs/SUBSCRIPTION.md)
 - [Desktop IPC API](docs/API.md)
 - [Build & installers](docs/BUILD.md)
 - [Testing report](docs/TESTING.md)
