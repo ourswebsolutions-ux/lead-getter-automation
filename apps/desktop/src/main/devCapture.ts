@@ -75,3 +75,25 @@ export async function runCapture(dir: string): Promise<void> {
   writeFileSync(join(dir, 'dark-subscription.png'), (await win.webContents.capturePage()).toPNG())
   app.quit()
 }
+
+/** Dev-only: runs a real Google Maps search from the UI and screenshots it (LGE_CAPTURE_MAPS=1). */
+export async function runMapsCapture(dir: string): Promise<void> {
+  mkdirSync(dir, { recursive: true })
+  const win = BrowserWindow.getAllWindows()[0]
+  await new Promise((r) => setTimeout(r, 2500))
+  await win.webContents.executeJavaScript(`localStorage.setItem('lge.page', '"maps"'); location.reload(); true`)
+  await new Promise((r) => setTimeout(r, 3000))
+  await win.webContents.executeJavaScript(`window.lge.invoke('maps:start', { keyword: 'bakery', location: 'Lahore', category: '', businessType: 'with', findEmails: true }); true`)
+  const shot = async (name: string) => {
+    win.show()
+    await win.webContents.insertCSS('*,*::before,*::after{animation:none!important;transition:none!important}')
+    writeFileSync(join(dir, `${name}.png`), (await win.webContents.capturePage()).toPNG())
+  }
+  await new Promise((r) => setTimeout(r, 75_000))
+  await shot('maps-running')
+  await new Promise((r) => setTimeout(r, 45_000))
+  await win.webContents.executeJavaScript(`window.lge.invoke('maps:stop'); true`)
+  await new Promise((r) => setTimeout(r, 4000))
+  await shot('maps-stopped')
+  app.quit()
+}

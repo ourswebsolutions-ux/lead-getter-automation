@@ -43,7 +43,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         title: 'Discovery',
         short: 'Find',
         items: [
-          { id: 'maps', label: 'Google Maps Leads', icon: ic(MapPin) },
+          { id: 'maps', label: 'Google Maps Search', icon: ic(MapPin) },
           { id: 'linkedin', label: 'LinkedIn Leads', icon: ic(Briefcase) },
           { id: 'apollo', label: 'Apollo Leads', icon: ic(Rocket) },
           { id: 'verification', label: 'Email Verification', icon: ic(MailCheck) }

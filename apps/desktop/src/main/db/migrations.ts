@@ -462,5 +462,46 @@ CREATE TABLE subscription_otp (
 
 DROP TABLE IF EXISTS license_state;
 `
+  },
+  {
+    version: 3,
+    name: 'google maps search (browser) results',
+    sql: `
+CREATE TABLE maps_searches (
+  id INTEGER PRIMARY KEY,
+  keyword TEXT NOT NULL,
+  location TEXT,
+  category TEXT,
+  business_type TEXT NOT NULL DEFAULT 'all' CHECK (business_type IN ('all','with','without')),
+  find_emails INTEGER NOT NULL DEFAULT 1,
+  status TEXT NOT NULL DEFAULT 'running' CHECK (status IN ('running','paused','completed','stopped','error')),
+  message TEXT,
+  processed INTEGER NOT NULL DEFAULT 0,
+  saved INTEGER NOT NULL DEFAULT 0,
+  duplicates INTEGER NOT NULL DEFAULT 0,
+  skipped INTEGER NOT NULL DEFAULT 0,
+  emails INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  finished_at TEXT
+);
+
+CREATE TABLE maps_results (
+  id INTEGER PRIMARY KEY,
+  search_id INTEGER REFERENCES maps_searches(id) ON DELETE SET NULL,
+  lead_id INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+  place_key TEXT NOT NULL UNIQUE,     -- Maps listing id: the same business is never stored twice
+  maps_url TEXT,
+  category TEXT,
+  rating REAL,
+  reviews INTEGER,
+  website_status TEXT NOT NULL,       -- has_website | possible_website | no_website | social_only
+  social_links TEXT,                  -- JSON array
+  email_note TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX ix_maps_results_search ON maps_results(search_id);
+CREATE INDEX ix_maps_results_lead ON maps_results(lead_id);
+`
   }
 ]
+

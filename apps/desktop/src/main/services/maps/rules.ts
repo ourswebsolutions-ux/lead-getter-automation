@@ -1,0 +1,175 @@
+// Website qualification rules, ported from the original Lead Finder (src/browser/website.js).
+// Pure functions so they can be unit-tested without a browser.
+
+const SOCIAL_HOSTS = [
+  'facebook.com', 'fb.com', 'fb.me', 'm.facebook.com', 'instagram.com', 'instagr.am',
+  'twitter.com', 'x.com', 'tiktok.com', 'linkedin.com', 'youtube.com', 'youtu.be',
+  'pinterest.com', 'snapchat.com', 'threads.net', 'wa.me', 'whatsapp.com', 'api.whatsapp.com',
+  'linktr.ee', 't.me', 'telegram.me', 'wa.link', 'wl.co', 'm.me', 'messenger.com', 'fb.watch', 'threads.com',
+  'telegram.org', 'line.me', 'viber.com', 'vk.com', 'discord.gg', 'beacons.ai', 'bio.link', 'lnk.bio', 'linkin.bio',
+  'linkr.bio', 'tap.bio', 'taplink.cc', 'solo.to'
+]
+
+const GOOGLE_LISTING_HOSTS = ['business.site', 'g.page', 'goo.gl', 'maps.app.goo.gl', 'business.google.com']
+
+const DIRECTORY_HOSTS = [
+  ...SOCIAL_HOSTS, ...GOOGLE_LISTING_HOSTS,
+  'google.com', 'google.com.pk', 'gstatic.com', 'googleusercontent.com', 'blogger.com',
+  'wikipedia.org', 'wikimapia.org', 'yelp.com', 'tripadvisor.com', 'foursquare.com',
+  'mapquest.com', 'waze.com', 'apple.com', 'bing.com', 'openstreetmap.org', 'mapcarta.com',
+  'zameen.com', 'graana.com', 'olx.com.pk', 'olx.com', 'lamudi.pk', 'agency21.com.pk',
+  'justdial.com', 'yellowpages.com', 'yellowpages.pk', 'yp.com.pk', 'cybo.com', 'hotfrog.com',
+  'brownbook.net', 'kompass.com', 'opendi.com', 'infobel.com', 'trustpilot.com', 'glassdoor.com',
+  'indeed.com', 'rozee.pk', 'crunchbase.com', 'dnb.com', 'bizapedia.com', 'manta.com',
+  'chamberofcommerce.com', 'cylex.com', 'cylex-pk.com', 'tuugo.pk', 'tuugo.com', 'find-open.com',
+  'nicelocal.com', 'wanderlog.com', 'restaurantguru.com', 'foodpanda.pk', 'zomato.com',
+  'daraz.pk', 'amazon.com', 'ebay.com', 'pakbiz.com', 'pakbd.com', 'businesslist.pk',
+  'zaubacorp.com', 'opencorporates.com', 'quora.com', 'reddit.com', 'medium.com',
+  'dawn.com', 'tribune.com.pk', 'propertyguru.com', 'bayut.com', 'dubizzle.com'
+]
+
+const hostMatchesList = (host: string, list: string[]) => list.some((d) => host === d || host.endsWith(`.${d}`))
+const cleanHost = (h: string) => h.toLowerCase().replace(/^www\./, '')
+
+/** Unwraps Google's redirect wrapper (https://www.google.com/url?q=...). */
+export function unwrapUrl(raw: string): URL | null {
+  let u: URL
+  try {
+    u = new URL(raw)
+  } catch {
+    return null
+  }
+  if (/(^|\.)google\.[a-z.]+$/.test(u.hostname) && u.pathname === '/url') {
+    const inner = u.searchParams.get('q') || u.searchParams.get('url')
+    if (inner) return unwrapUrl(inner)
+  }
+  return u
+}
+
+export type SiteKind = 'independent' | 'social' | 'listing' | 'invalid'
+
+/** Classifies a website link shown on a Maps listing. */
+export function classifyWebsite(raw: string | null | undefined): { kind: SiteKind; host: string; url: string } {
+  const u = raw ? unwrapUrl(raw) : null
+  if (!u || !/^https?:$/.test(u.protocol)) return { kind: 'invalid', host: '', url: raw || '' }
+  const host = cleanHost(u.hostname)
+  const display = `${host}${u.pathname === '/' ? '' : u.pathname.replace(/\/$/, '')}`
+  if (hostMatchesList(host, SOCIAL_HOSTS)) return { kind: 'social', host, url: display }
+  if (hostMatchesList(host, GOOGLE_LISTING_HOSTS) || /(^|\.)google\.[a-z.]+$/.test(host)) return { kind: 'listing', host, url: display }
+  return { kind: 'independent', host, url: display }
+}
+
+/** Social/contact links on a listing (never treated as a website). */
+export function socialLinksOf({ website, links }: { website?: string; links?: string[] }): string[] {
+  const found = new Map<string, string>()
+  for (const raw of [website, ...(links || [])]) {
+    if (!raw) continue
+    const c = classifyWebsite(raw)
+    if (c.kind === 'social') found.set(c.url.toLowerCase(), found.get(c.url.toLowerCase()) || c.url)
+  }
+  return [...found.values()].slice(0, 10)
+}
+
+const GENERIC_WORDS = new Set(
+  `the and of for pvt private ltd limited llc inc co company corp corporation group
+real estate realestate realty realtors realtor property properties estates agency agencies
+associates associate marketing builders builder developers developer development construction
+consultants consultant consultancy services service solutions enterprises enterprise traders trading
+international intl global center centre office branch shop store mart house home homes
+land lands city town society housing scheme phase block sector town plaza tower towers
+lahore karachi islamabad rawalpindi pakistan punjab sindh dha bahria gulberg johar
+restaurant cafe hotel clinic hospital school college academy institute salon studio`.split(/\s+/)
+)
+const SUFFIX_LABELS = new Set(['com', 'net', 'org', 'pk', 'co', 'io', 'info', 'biz', 'uk', 'ae', 'us', 'in', 'edu', 'gov', 'me', 'online', 'site', 'store', 'shop', 'app', 'xyz'])
+
+const nameTokens = (name: string) =>
+  String(name || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
+
+function domainLabel(host: string) {
+  const labels = host.split('.').filter((l) => !SUFFIX_LABELS.has(l))
+  return labels.length ? labels[labels.length - 1].replace(/-/g, '') : ''
+}
+
+/** Does this domain plausibly belong to the named business? */
+export function hostMatchesName(host: string, name: string): boolean {
+  const label = domainLabel(cleanHost(host))
+  if (label.length < 3) return false
+  const tokens = nameTokens(name)
+  if (tokens.filter((t) => t.length >= 4 && !GENERIC_WORDS.has(t)).some((t) => label.includes(t))) return true
+  if (label.length >= 5 && tokens.join('').includes(label)) return true
+  const initials = tokens.filter((t) => !['the', 'and', 'of'].includes(t)).map((t) => t[0]).join('')
+  return initials.length >= 3 && label === initials
+}
+
+/** A business's own site linked from a "Book online"/"Learn more" button, only when the domain carries its name. */
+export function ownSiteOf({ name, links }: { name: string; links?: string[] }): { url: string; raw: string } | null {
+  for (const raw of links || []) {
+    const c = classifyWebsite(raw)
+    if (c.kind === 'independent' && hostMatchesName(c.host, name)) return { url: c.url, raw }
+  }
+  return null
+}
+
+export type WebsiteStatus = 'has_website' | 'possible_website' | 'no_website' | 'social_only' | 'unverified' | 'closed'
+
+/** Decides from web-search evidence for a business that Maps lists without a website. */
+export function judgeWebPresence({ name, knowledgePanelWebsite, resultUrls }: { name: string; knowledgePanelWebsite?: string; resultUrls?: string[] }): { status: WebsiteStatus; detail: string | null } {
+  if (knowledgePanelWebsite) {
+    const c = classifyWebsite(knowledgePanelWebsite)
+    if (c.kind === 'independent') return { status: 'has_website', detail: c.url }
+  }
+  for (const raw of resultUrls || []) {
+    const u = unwrapUrl(raw)
+    if (!u) continue
+    const host = cleanHost(u.hostname)
+    if (hostMatchesList(host, DIRECTORY_HOSTS) || /(^|\.)google\.[a-z.]+$/.test(host)) continue
+    if (hostMatchesName(host, name)) return { status: 'possible_website', detail: host }
+  }
+  return { status: 'no_website', detail: null }
+}
+
+/** Web-search query: business name plus its city/area. */
+export function presenceQuery(name: string, address: string): string {
+  const parts = String(address || '').split(',').map((s) => s.trim()).filter((s) => s && !/^\d[\d\s-]*$/.test(s) && !/^pakistan$/i.test(s))
+  const locality = parts.length ? parts[parts.length - 1].replace(/\s*\d{5}$/, '') : ''
+  return `"${name}"${locality ? ` ${locality}` : ''}`
+}
+
+export type BusinessType = 'all' | 'with' | 'without'
+const KEEP: Record<BusinessType, Set<WebsiteStatus>> = {
+  without: new Set(['no_website', 'social_only']),
+  with: new Set(['has_website']),
+  all: new Set(['no_website', 'social_only', 'has_website', 'possible_website'])
+}
+export const keepFor = (type: BusinessType, status: WebsiteStatus) => KEEP[type].has(status)
+
+/** Stable listing id from a Maps URL (feature id, cid, or path). */
+export function placeKey(url: string): string {
+  const s = String(url || '')
+  const fid = s.match(/!1s(0x[0-9a-f]+:0x[0-9a-f]+)/i)
+  if (fid) return fid[1].toLowerCase()
+  const cid = s.match(/[?&]cid=(\d+)/)
+  if (cid) return `cid:${cid[1]}`
+  try {
+    const u = new URL(s)
+    return `${u.hostname}${decodeURIComponent(u.pathname).replace(/\/data=.*$/, '').replace(/\/$/, '')}`
+  } catch {
+    return s
+  }
+}
+
+export function cleanMapsUrl(url: string): string {
+  try {
+    const u = new URL(url)
+    return `${u.origin}${u.pathname}`
+  } catch {
+    return url
+  }
+}
+
+/** Builds the Maps query from the form: "keyword in location". */
+export function buildQuery(keyword: string, location: string, category: string): string {
+  const what = (keyword || category || '').trim()
+  const where = (location || '').trim()
+  return where ? `${what} in ${where}` : what
+}

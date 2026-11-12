@@ -1,79 +1,294 @@
-import { useState } from 'react'
-import { Search, MapPin } from 'lucide-react'
-import { rpc, useAction, useQuery } from '../../lib/rpc'
-import { splitList } from '../../lib/format'
-import { Button, Card, Field, Input, Select, SwitchRow, TagInput, Textarea, Callout } from '../../components/ui'
-import { DiscoveryLayout, KeyNotice } from './shared'
+import { useEffect, useRef, useState } from 'react'
+import { Search, Square, MapPin, Tag, SlidersHorizontal, Download, Loader2, AlertTriangle, CheckCircle2, XCircle, Star, ExternalLink, X } from 'lucide-react'
+import { rpc, useAction, useEvent, useQuery } from '../../lib/rpc'
+import { fmtNum } from '../../lib/format'
+import { Button, Checkbox, DataTable, EmptyState, Input, Menu, Pager, Segmented, Select, type Column } from '../../components/ui'
 
-const CATEGORY_SUGGESTIONS = ['Restaurants', 'Cafes', 'Car dealerships', 'Auto repair', 'Real estate agencies', 'Dentists', 'Skin care clinics', 'Med spas', 'Law firms', 'Accountants', 'Gyms', 'Hotels', 'Salons', 'Bakeries', 'Clinics', 'Retail stores', 'Construction companies', 'Marketing agencies']
-const COUNTRIES = ['United States', 'United Kingdom', 'Canada', 'Australia', 'Pakistan', 'United Arab Emirates', 'Saudi Arabia', 'Germany', 'India', 'South Africa', 'Qatar', 'Ireland', 'New Zealand', 'Singapore', 'Malaysia', 'France', 'Spain', 'Italy', 'Netherlands', 'Turkey']
+type BusinessType = 'all' | 'with' | 'without'
+type TriState = '' | 'with' | 'without'
+interface Filters {
+  email: TriState
+  website: TriState
+  phone: TriState
+  category: string
+  minRating: string
+}
+const NO_FILTERS: Filters = { email: '', website: '', phone: '', category: '', minRating: '' }
+
+const CATEGORIES = ['Restaurants', 'Cafes', 'Shoe stores', 'Clothing stores', 'Garments', 'Car dealers', 'Auto repair', 'Real estate agencies', 'Dentists', 'Clinics', 'Skin care clinics', 'Beauty salons', 'Gyms', 'Hotels', 'Bakeries', 'Pharmacies', 'Schools', 'Law firms', 'Accountants', 'Electronics stores', 'Furniture stores', 'Jewelry stores']
+
+const STATUS: Record<string, [string, string]> = {
+  has_website: ['green', 'Has website'],
+  possible_website: ['blue', 'Website found online'],
+  no_website: ['amber', 'No website'],
+  social_only: ['violet', 'Social media only']
+}
+
+interface Live {
+  searchId: number
+  state: 'running' | 'paused' | 'completed' | 'stopped' | 'error'
+  message: string
+  processed: number
+  saved: number
+  duplicates: number
+  skipped: number
+  emails: number
+}
 
 export function MapsPage() {
-  const [keywords, setKeywords] = useState<string[]>([])
-  const [country, setCountry] = useState('United States')
-  const [state, setState] = useState('')
-  const [locations, setLocations] = useState('')
-  const [nationwide, setNationwide] = useState(false)
-  const [max, setMax] = useState(60)
-  const [extract, setExtract] = useState(true)
-  const { data: nationwideCountries } = useQuery<string[]>('discovery:countries', [])
+  const [keyword, setKeyword] = useState('')
+  const [location, setLocation] = useState('')
+  const [category, setCategory] = useState('')
+  const [type, setType] = useState<BusinessType>('all')
+  const [findEmails, setFindEmails] = useState(true)
+  const [live, setLive] = useState<Live | null>(null)
+  const [filters, setFilters] = useState<Filters>(NO_FILTERS)
+  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'id', dir: 'desc' })
+  const [offset, setOffset] = useState(0)
+  const [pageSize, setPageSize] = useState(50)
+  const [selected, setSelected] = useState<Set<number>>(new Set())
   const { busy, run } = useAction()
-  const locs = splitList(locations).map((l) => (state && !l.includes(',') ? `${l}, ${state}` : l))
-  if (state && !locs.length && !nationwide) locs.push(state)
-  const queryCount = keywords.length * Math.max(1, locs.length + (nationwide ? 10 : 0))
+
+  // Restore an in-progress search when returning to this tab.
+  const { data: active } = useQuery<any>('maps:active', [])
+  useEffect(() => {
+    if (active && !live) setLive({ searchId: active.id, state: active.status, message: active.message ?? '', processed: active.processed, saved: active.saved, duplicates: active.duplicates, skipped: active.skipped, emails: active.emails })
+  }, [active])
+  useEvent('maps:status', (p: Live) => setLive(p))
+
+  const apiFilter = {
+    email: filters.email || undefined,
+    website: filters.website || undefined,
+    phone: filters.phone || undefined,
+    category: filters.category || undefined,
+    minRating: filters.minRating ? Number(filters.minRating) : undefined
+  }
+  const { data, loading } = useQuery<{ rows: any[]; total: number }>('maps:results', [apiFilter, { limit: pageSize, offset, sort: sort.key, dir: sort.dir }], { events: ['maps:result', 'leads:changed'] })
+  const { data: foundCategories } = useQuery<string[]>('maps:categories', [], { events: ['maps:result'] })
+  useEffect(() => setOffset(0), [JSON.stringify(filters), pageSize])
+
+  const running = live?.state === 'running' || live?.state === 'paused'
+  const activeFilters = Object.values(filters).filter(Boolean).length
 
   const start = () =>
-    run('start', () => rpc('discovery:start', 'google_maps', { keywords, locations: locs, country: country || undefined, nationwide, maxPerQuery: max, extractEmails: extract }), {
-      success: (r: any) => (r.existing ? 'That search is already running' : 'Search started — results stream into Leads')
+    run('start', () => rpc('maps:start', { keyword, location, category, businessType: type, findEmails })).then((r: any) => {
+      if (r) {
+        setLive({ searchId: r.searchId, state: 'running', message: 'Starting…', processed: 0, saved: 0, duplicates: 0, skipped: 0, emails: 0 })
+        setSort({ key: 'id', dir: 'desc' })
+        setOffset(0)
+      }
     })
 
+  const exportAs = (format: 'csv' | 'xlsx', which: 'all' | 'selected') =>
+    run('exp', () => rpc('maps:export', which === 'selected' ? { ids: [...selected], format } : { filter: apiFilter, format }), {
+      success: (r: any) => (r ? `Exported ${r.count} businesses` : 'Export cancelled')
+    })
+
+  const columns: Column<any>[] = [
+    { key: 'n', header: '#', width: 48, render: (r) => <span className="faint num">{(data?.rows.indexOf(r) ?? 0) + offset + 1}</span> },
+    {
+      key: 'name', header: 'Business Name', sortable: true,
+      render: (r) => (
+        <div className="row gap-4" style={{ minWidth: 180 }}>
+          <span className="primary-cell truncate" style={{ maxWidth: 240 }} title={r.business_name}>{r.business_name}</span>
+          {r.maps_url && <a title="Open in Google Maps" onClick={(e) => { e.stopPropagation(); void rpc('app:openExternal', r.maps_url) }} style={{ cursor: 'pointer', display: 'inline-flex' }}><ExternalLink size={12} /></a>}
+        </div>
+      )
+    },
+    { key: 'category', header: 'Category', sortable: true, render: (r) => <span className="muted truncate" style={{ display: 'block', maxWidth: 150 }}>{r.category || '—'}</span> },
+    { key: 'phone', header: 'Phone', sortable: true, render: (r) => (r.phone ? <span className="num" style={{ whiteSpace: 'nowrap' }}>{r.phone}</span> : <span className="faint">—</span>) },
+    {
+      key: 'email', header: 'Email', sortable: true,
+      render: (r) => r.email ? <span className="truncate" style={{ display: 'block', maxWidth: 200 }} title={r.emails}>{r.email}</span> : <span className="faint" title={r.email_note ?? ''}>{r.email_note && /could not/.test(r.email_note) ? 'Not readable' : '—'}</span>
+    },
+    {
+      key: 'website', header: 'Website', sortable: true,
+      render: (r) => r.website ? (
+        <a onClick={(e) => { e.stopPropagation(); void rpc('app:openExternal', r.website) }} className="truncate" style={{ display: 'block', maxWidth: 170, cursor: 'pointer' }} title={r.website}>{r.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}</a>
+      ) : <span className="faint">—</span>
+    },
+    { key: 'address', header: 'Address', sortable: true, render: (r) => <span className="muted truncate" style={{ display: 'block', maxWidth: 240 }} title={r.address}>{r.address || '—'}</span> },
+    {
+      key: 'rating', header: 'Rating', sortable: true, align: 'right',
+      render: (r) => r.rating ? <span className="row gap-4 num" style={{ justifyContent: 'flex-end', whiteSpace: 'nowrap' }}><Star size={12} fill="var(--amber)" color="var(--amber)" />{Number(r.rating).toFixed(1)}{r.reviews ? <span className="faint">({fmtNum(r.reviews)})</span> : null}</span> : <span className="faint">—</span>
+    },
+    { key: 'status', header: 'Status', sortable: true, render: (r) => { const [c, l] = STATUS[r.website_status] ?? ['', r.website_status]; return <span className={`pill ${c}`}><span className="d" />{l}</span> } }
+  ]
+
   return (
-    <DiscoveryLayout
-      title="Google Maps Leads"
-      desc="Discover local businesses by category and location, with phone, website, rating and address."
-      jobTypes={['discover_google_maps']}
-      source="google_maps"
-      form={
-        <>
-          <KeyNotice names={['googlePlaces']} label="Google Places API" docs={<>Uses the official Places API (Text Search). Each query returns up to 60 places; Google bills per request.</>} />
-          <Card title={<span className="row"><MapPin size={14} /> New search</span>} footer={<Button variant="primary" icon={<Search size={14} />} loading={busy === 'start'} disabled={!keywords.length || (!locs.length && !nationwide && !country)} onClick={start}>Start search</Button>}>
-            <div className="col gap-16">
-              <Field label="Business categories or keywords" hint="Press Enter after each. Multiple keywords run as separate queries.">
-                <TagInput value={keywords} onChange={setKeywords} placeholder="e.g. Italian restaurants, car dealers…" suggestions={CATEGORY_SUGGESTIONS} />
-              </Field>
-              <div className="grid-2">
-                <Field label="Country">
-                  <Select value={country} onChange={setCountry} placeholder="Any country" options={COUNTRIES.map((c) => ({ value: c, label: c }))} />
-                </Field>
-                <Field label="State / province" hint="Optional">
-                  <Input value={state} onChange={(e) => setState(e.target.value)} placeholder="e.g. Texas" />
-                </Field>
+    <div className="page">
+      <div className="page-inner">
+        <div className="ph" style={{ marginBottom: 14 }}>
+          <div>
+            <h1>Google Maps Search</h1>
+            <p>Find businesses on Google Maps with their phone, website, email and rating.</p>
+          </div>
+        </div>
+
+        {/* ---------------- search area ---------------- */}
+        <form
+          className="card"
+          style={{ padding: 14 }}
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (!running) void start()
+          }}
+        >
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px,1.4fr) minmax(150px,1fr) minmax(150px,1fr) auto auto', gap: 10, alignItems: 'end' }}>
+            <Labeled label="Business keyword">
+              <Input autoFocus value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="e.g. Shoes shop, Restaurants, Garments" icon={<Search size={14} />} disabled={running} />
+            </Labeled>
+            <Labeled label="Location">
+              <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="City, area or country" icon={<MapPin size={14} />} disabled={running} />
+            </Labeled>
+            <Labeled label="Category">
+              <Input list="maps-categories" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Select or type" icon={<Tag size={14} />} disabled={running} />
+              <datalist id="maps-categories">{[...new Set([...CATEGORIES, ...(foundCategories ?? [])])].map((c) => <option key={c} value={c} />)}</datalist>
+            </Labeled>
+            <Labeled label="Business type">
+              <Segmented<BusinessType> value={type} onChange={(v) => !running && setType(v)} options={[{ value: 'all', label: 'All Businesses' }, { value: 'with', label: 'With Website' }, { value: 'without', label: 'Without Website' }]} />
+            </Labeled>
+            {running ? (
+              <Button type="button" variant="danger" className="solid" size="lg" icon={<Square size={14} />} onClick={() => run('stop', () => rpc('maps:stop'))}>Stop</Button>
+            ) : (
+              <Button type="submit" variant="primary" size="lg" icon={<Search size={15} />} loading={busy === 'start'} disabled={!keyword.trim() && !category.trim()}>Search</Button>
+            )}
+          </div>
+          <div className="row mt-8" style={{ minHeight: 26 }}>
+            <Checkbox checked={findEmails} onChange={(v) => !running && setFindEmails(v)} label={<span style={{ fontSize: 12.5 }}>Find emails from business websites</span>} />
+            <div className="grow" />
+            <span className="faint" style={{ fontSize: 12 }}>A Chrome window opens to run the search. Keep it open while searching.</span>
+          </div>
+          {live && <Progress live={live} />}
+        </form>
+
+        {/* ---------------- toolbar ---------------- */}
+        <div className="row mt-16" style={{ marginBottom: 10 }}>
+          <b style={{ fontSize: 14 }}>{fmtNum(data?.total ?? 0)} businesses</b>
+          {selected.size > 0 && <span className="faint" style={{ fontSize: 12.5 }}>· {selected.size} selected <a style={{ cursor: 'pointer' }} onClick={() => setSelected(new Set())}>clear</a></span>}
+          <div className="grow" />
+          <FiltersButton value={filters} onChange={setFilters} categories={foundCategories ?? []} count={activeFilters} />
+          <Menu
+            align="right"
+            trigger={(o) => <Button icon={<Download size={14} />} onClick={o} loading={busy === 'exp'}>Export</Button>}
+            items={[
+              { header: `All results${activeFilters ? ' (filtered)' : ''}` },
+              { label: 'Export all — CSV', onClick: () => exportAs('csv', 'all') },
+              { label: 'Export all — Excel', onClick: () => exportAs('xlsx', 'all') },
+              { sep: true },
+              { header: `Selected (${selected.size})` },
+              { label: 'Export selected — CSV', disabled: !selected.size, onClick: () => exportAs('csv', 'selected') },
+              { label: 'Export selected — Excel', disabled: !selected.size, onClick: () => exportAs('xlsx', 'selected') }
+            ]}
+          />
+        </div>
+
+        {/* ---------------- results table ---------------- */}
+        <div className="card" style={{ overflow: 'hidden' }}>
+          <DataTable
+            loading={loading}
+            rows={data?.rows}
+            columns={columns}
+            selectable
+            selected={selected}
+            onSelect={(s) => setSelected(s as Set<number>)}
+            sort={sort}
+            onSort={(s) => {
+              setSort(s)
+              setOffset(0)
+            }}
+            empty={
+              activeFilters ? (
+                <EmptyState title="No businesses match these filters" action={<Button onClick={() => setFilters(NO_FILTERS)}>Clear filters</Button>} />
+              ) : (
+                <EmptyState icon={<MapPin size={22} />} title="No businesses yet" desc="Enter a keyword and location above and click Search. Businesses appear here as they are found." />
+              )
+            }
+          />
+          {(data?.total ?? 0) > 0 && (
+            <div className="row" style={{ borderTop: '1px solid var(--border)' }}>
+              <div className="grow"><Pager total={data!.total} offset={offset} limit={pageSize} onChange={setOffset} /></div>
+              <div className="row" style={{ padding: '0 14px', fontSize: 12.5 }}>
+                <span className="faint">Rows</span>
+                <Select value={pageSize} onChange={(v) => setPageSize(Number(v))} options={[25, 50, 100, 200].map((n) => ({ value: n, label: String(n) }))} className="" />
               </div>
-              <Field label="Cities, ZIP or postal codes" hint="One per line or comma-separated. Each keyword is searched in every location.">
-                <Textarea rows={4} value={locations} onChange={(e) => setLocations(e.target.value)} placeholder={'Austin\nDallas\n75001'} />
-              </Field>
-              <div>
-                <SwitchRow
-                  title="Nationwide search"
-                  desc={nationwideCountries?.includes(country) ? `Adds the major cities of ${country} to your locations.` : 'Available for countries with a built-in city list — otherwise list the cities you want.'}
-                  on={nationwide}
-                  onChange={setNationwide}
-                  disabled={!nationwideCountries?.includes(country)}
-                />
-                <SwitchRow title="Find emails on business websites" desc="Visits each website (respecting robots.txt) to extract contact emails. New emails are queued for verification." on={extract} onChange={setExtract} />
-              </div>
-              <Field label="Maximum results per query" hint="Google returns at most 60 places per query.">
-                <Select value={max} onChange={(v) => setMax(Number(v))} options={[20, 40, 60].map((n) => ({ value: n, label: `${n} places` }))} />
-              </Field>
-              {keywords.length > 0 && (
-                <Callout>
-                  This will run about <b>{queryCount}</b> {queryCount === 1 ? 'query' : 'queries'} (up to {(queryCount * max).toLocaleString()} places). Duplicates are merged automatically.
-                </Callout>
-              )}
             </div>
-          </Card>
-        </>
-      }
-    />
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="field" style={{ gap: 5 }}>
+      <label style={{ fontSize: 12 }}>{label}</label>
+      {children}
+    </div>
+  )
+}
+
+function Progress({ live }: { live: Live }) {
+  const icon =
+    live.state === 'running' ? <Loader2 size={15} style={{ animation: 'spin .8s linear infinite' }} color="var(--accent)" />
+    : live.state === 'paused' ? <AlertTriangle size={15} color="var(--amber)" />
+    : live.state === 'completed' ? <CheckCircle2 size={15} color="var(--green)" />
+    : live.state === 'error' ? <XCircle size={15} color="var(--red)" />
+    : <Square size={13} color="var(--text-3)" />
+  return (
+    <div className="mt-8" style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+      <div className="row" style={{ fontSize: 13, background: live.state === 'paused' ? 'var(--amber-soft)' : undefined, borderRadius: 8, padding: live.state === 'paused' ? '8px 10px' : 0 }}>
+        {icon}
+        <span className="grow" style={{ fontWeight: live.state === 'running' ? 400 : 550 }}>{live.message}</span>
+        <span className="faint num" style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>
+          Checked {fmtNum(live.processed)} · Saved <b style={{ color: 'var(--text)' }}>{fmtNum(live.saved)}</b> · Duplicates {fmtNum(live.duplicates)} · Emails {fmtNum(live.emails)}
+        </span>
+      </div>
+      {(live.state === 'running' || live.state === 'paused') && <div className="progress indeterminate mt-8"><div /></div>}
+    </div>
+  )
+}
+
+function FiltersButton({ value, onChange, categories, count }: { value: Filters; onChange: (f: Filters) => void; categories: string[]; count: number }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false)
+    setTimeout(() => window.addEventListener('mousedown', close))
+    return () => window.removeEventListener('mousedown', close)
+  }, [open])
+  const tri = (k: 'email' | 'website' | 'phone', label: string) => (
+    <div className="row" style={{ justifyContent: 'space-between' }}>
+      <span style={{ fontSize: 13 }}>{label}</span>
+      <Segmented<TriState> value={value[k]} onChange={(v) => onChange({ ...value, [k]: v })} options={[{ value: '', label: 'Any' }, { value: 'with', label: `With` }, { value: 'without', label: `Without` }]} />
+    </div>
+  )
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <Button icon={<SlidersHorizontal size={14} />} onClick={() => setOpen((o) => !o)}>
+        Filters{count ? ` · ${count}` : ''}
+      </Button>
+      {open && (
+        <div className="menu" style={{ position: 'absolute', right: 0, top: 38, width: 330, padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {tri('email', 'Email')}
+          {tri('website', 'Website')}
+          {tri('phone', 'Phone')}
+          <div className="row" style={{ justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 13 }}>Category</span>
+            <Select value={value.category} onChange={(v) => onChange({ ...value, category: v })} placeholder="Any category" options={categories.map((c) => ({ value: c, label: c }))} className="" />
+          </div>
+          <div className="row" style={{ justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 13 }}>Rating</span>
+            <Select value={value.minRating} onChange={(v) => onChange({ ...value, minRating: v })} placeholder="Any rating" options={['3', '3.5', '4', '4.5'].map((r) => ({ value: r, label: `${r}+ stars` }))} className="" />
+          </div>
+          <div className="row" style={{ justifyContent: 'space-between', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+            <Button size="sm" variant="ghost" icon={<X size={13} />} disabled={!count} onClick={() => onChange(NO_FILTERS)}>Clear all</Button>
+            <Button size="sm" variant="primary" onClick={() => setOpen(false)}>Done</Button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }

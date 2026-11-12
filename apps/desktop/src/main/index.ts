@@ -16,6 +16,7 @@ import { registerWhatsApp, restoreSessions, shutdownWhatsApp } from './services/
 import { registerEmail, startInboxPolling, stopInboxPolling } from './services/email'
 import { startCampaignEngine, stopCampaignEngine } from './services/campaigns'
 import { initSubscription } from './services/subscription'
+import { recoverSearches, shutdownMaps } from './services/maps'
 
 // Separate identity from any other "Lead Getter" install: own userData dir, own DB, own sessions.
 app.setName('Lead Getter Enterprise')
@@ -171,13 +172,17 @@ app.whenReady().then(async () => {
   startCampaignEngine()
   startInboxPolling()
   initSubscription()
+  recoverSearches()
   void restoreSessions()
   void setupUpdates()
 
   if (!app.isPackaged && process.env.LGE_CAPTURE_DIR) {
     const dev = await import('./devCapture')
-    dev.seedSampleData()
-    void dev.runCapture(process.env.LGE_CAPTURE_DIR)
+    if (process.env.LGE_CAPTURE_MAPS) void dev.runMapsCapture(process.env.LGE_CAPTURE_DIR)
+    else {
+      dev.seedSampleData()
+      void dev.runCapture(process.env.LGE_CAPTURE_DIR)
+    }
   }
 
   app.on('activate', () => {
@@ -206,6 +211,7 @@ app.on('before-quit', async (e) => {
     stopInboxPolling()
     await stopJobRunner()
     await shutdownWhatsApp()
+    await shutdownMaps()
     db().exec('PRAGMA wal_checkpoint(TRUNCATE)')
     db().close()
   } catch (err) {

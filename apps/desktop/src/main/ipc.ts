@@ -16,6 +16,7 @@ import * as wa from './services/whatsapp'
 import * as email from './services/email'
 import * as campaigns from './services/campaigns'
 import * as analytics from './services/analytics'
+import * as gmaps from './services/maps'
 import * as license from './services/subscription'
 import { testPlacesKey, MAJOR_CITIES } from './services/sources/googleMaps'
 import { testCse } from './services/sources/linkedin'
@@ -26,7 +27,14 @@ const log = logger('ipc')
 type Handler = (...args: any[]) => unknown
 
 /** Channels that require an active license when licensing is enforced. */
+const WEBSITE_STATUS: Record<string, string> = { has_website: 'Has website', possible_website: 'Website found online', no_website: 'No website', social_only: 'Social media only' }
+const MAPS_EXPORT_COLUMNS: [string, string][] = [
+  ['n', '#'], ['business_name', 'Business Name'], ['category', 'Category'], ['phone', 'Phone'], ['emails', 'Email'], ['website', 'Website'],
+  ['address', 'Address'], ['rating', 'Rating'], ['reviews', 'Reviews'], ['status', 'Status'], ['maps_url', 'Google Maps URL']
+]
+
 const LICENSED = new Set([
+  'maps:start',
   'discovery:start', 'verification:single', 'verification:bulk', 'verification:file', 'verification:leads', 'verification:reverify',
   'ai:research', 'ai:outreach', 'campaigns:start', 'campaigns:resume', 'conversations:send', 'agent:approve'
 ])
@@ -132,6 +140,27 @@ const handlers: Record<string, Handler> = {
   'leads:importCommit': async (file: string, mapping: Record<string, string>, opts) => {
     const t = await io.readTable(file)
     return io.importLeads(t.rows, mapping, opts)
+  },
+
+  // ------------------------------------------------------------ Google Maps (browser) search
+  'maps:start': (input) => gmaps.startSearch(input),
+  'maps:stop': () => gmaps.stopSearch(),
+  'maps:active': () => gmaps.activeSearch(),
+  'maps:searches': () => gmaps.recentSearches(),
+  'maps:results': (filter, opts) => gmaps.listResults(filter ?? {}, opts),
+  'maps:categories': () => gmaps.resultCategories(),
+  'maps:delete': (ids: number[]) => gmaps.deleteResults(ids),
+  'maps:export': async (input: { filter?: any; ids?: number[]; format: 'csv' | 'xlsx' }, _e?: any, win?: BrowserWindow) => {
+    const rows = gmaps.resultRowsForExport(input.filter ?? {}, input.ids).map((r: any, i: number) => ({ ...r, n: i + 1, status: WEBSITE_STATUS[r.website_status] ?? r.website_status }))
+    if (!rows.length) throw new Error('No results to export')
+    const r = await dialog.showSaveDialog(win!, {
+      defaultPath: `google-maps-leads-${new Date().toISOString().slice(0, 10)}.${input.format}`,
+      filters: [input.format === 'xlsx' ? { name: 'Excel', extensions: ['xlsx'] } : { name: 'CSV', extensions: ['csv'] }]
+    })
+    if (r.canceled || !r.filePath) return null
+    const n = await io.writeExport(r.filePath, rows, MAPS_EXPORT_COLUMNS)
+    logActivity('user', 'maps_exported', 'maps', n)
+    return { file: r.filePath, count: n }
   },
 
   // ------------------------------------------------------------ discovery
