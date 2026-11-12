@@ -7,6 +7,7 @@ import { createPublicKey, verify } from 'node:crypto'
 import { createApp, addMonths } from '../src/app.js'
 
 let server, base, ctx
+const sent = []
 const DEVICE_A = 'A'.repeat(32)
 const DEVICE_B = 'B'.repeat(32)
 const DEVICE_C = 'C'.repeat(32)
@@ -23,7 +24,7 @@ const verifyToken = (token) => {
 
 before(async () => {
   const dir = mkdtempSync(join(tmpdir(), 'lge-lic-'))
-  ctx = createApp({ dbFile: join(dir, 'db.sqlite'), keyFile: join(dir, 'k.pem'), sessionSecret: 'x'.repeat(40), adminEmail: 'admin@test.io', adminPassword: 'correct horse battery' })
+  ctx = createApp({ dbFile: join(dir, 'db.sqlite'), keyFile: join(dir, 'k.pem'), sessionSecret: 'x'.repeat(40), adminEmail: 'admin@test.io', adminPassword: 'correct horse battery', mailer: { sendMail: async (m) => { sent.push(m) } } })
   server = ctx.app.listen(0)
   await new Promise((r) => server.once('listening', r))
   base = `http://127.0.0.1:${server.address().port}`
@@ -132,15 +133,43 @@ test('free trial: one per device, signed, 2 days, refused once used up', async (
   assert.equal(c.body.code, 'trial_used')
 })
 
-test('purchase requests are stored, validated and fulfilled by issuing a license', async () => {
-  assert.equal((await call('/api/v1/purchase-requests', { planCode: 'six_month', name: 'Ali', email: 'bad' })).status, 400)
-  const r = await call('/api/v1/purchase-requests', { planCode: 'six_month', name: 'Ali', email: 'ali@shop.pk', phone: '+92300', deviceId: 'E'.repeat(32) })
+test('OTP activation: code emailed to vendor, wrong codes limited, correct code activates; renewal extends', async () => {
+  const d = 'F'.repeat(32)
+  assert.equal((await call('/api/v1/subscriptions/request-otp', { planCode: 'nope', deviceId: d })).status, 400)
+  const r = await call('/api/v1/subscriptions/request-otp', { planCode: 'basic_monthly', deviceId: d, name: 'Ali', phone: '+92300', deviceName: 'PC' })
   assert.equal(r.status, 201)
-  const { body: login } = await call('/api/admin/login', { email: 'admin@test.io', password: 'correct horse battery' })
-  const list = await call('/api/admin/requests', undefined, login.token)
-  assert.equal(list.body.requests[0].status, 'new')
-  const lic = await call('/api/admin/licenses', { planCode: 'six_month', customerEmail: 'ali@shop.pk', requestId: r.body.id, sendEmail: false }, login.token)
-  assert.equal(lic.status, 201)
-  const after = await call('/api/admin/requests', undefined, login.token)
-  assert.equal(after.body.requests.find((x) => x.id === r.body.id).status, 'fulfilled')
+  const mail = sent.at(-1)
+  assert.equal(mail.to, 'admin@test.io')
+  const code = /OTP (\d{4})/.exec(mail.subject)[1]
+  assert.match(mail.text, /Customer: Ali/)
+  const wrong = String((Number(code) + 1) % 10000).padStart(4, '0')
+  const w = await call('/api/v1/subscriptions/verify-otp', { deviceId: d, code: wrong })
+  assert.equal(w.body.code, 'wrong_code')
+  // Another computer can't use this computer's code.
+  assert.equal((await call('/api/v1/subscriptions/verify-otp', { deviceId: '9'.repeat(32), code })).body.code, 'no_request')
+  const ok = await call('/api/v1/subscriptions/verify-otp', { deviceId: d, code })
+  assert.equal(ok.status, 200)
+  const p = verifyToken(ok.body.token)
+  assert.equal(p.plan, 'basic_monthly')
+  assert.equal(p.device, d)
+  // Code is single-use.
+  assert.equal((await call('/api/v1/subscriptions/verify-otp', { deviceId: d, code })).body.code, 'no_request')
+  // Renewal on the same computer extends the same subscription.
+  await call('/api/v1/subscriptions/request-otp', { planCode: 'six_month', deviceId: d })
+  const code2 = /OTP (\d{4})/.exec(sent.at(-1).subject)[1]
+  const renew = await call('/api/v1/subscriptions/verify-otp', { deviceId: d, code: code2 })
+  assert.equal(renew.body.licenseKey, ok.body.licenseKey)
+  const months = (Date.parse(renew.body.expiresAt) - Date.parse(ok.body.expiresAt)) / 86400_000
+  assert.ok(months > 179 && months < 185, `six months added (${months})`)
+})
+
+test('OTP locks after 5 wrong attempts', async () => {
+  const d = '7'.repeat(32)
+  await call('/api/v1/subscriptions/request-otp', { planCode: 'lifetime', deviceId: d })
+  const code = /OTP (\d{4})/.exec(sent.at(-1).subject)[1]
+  const wrong = String((Number(code) + 1) % 10000).padStart(4, '0')
+  let last
+  for (let i = 0; i < 5; i++) last = await call('/api/v1/subscriptions/verify-otp', { deviceId: d, code: wrong })
+  assert.equal(last.body.code, 'otp_locked')
+  assert.equal((await call('/api/v1/subscriptions/verify-otp', { deviceId: d, code })).body.code, 'no_request')
 })

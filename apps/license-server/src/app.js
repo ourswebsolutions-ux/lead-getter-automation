@@ -1,4 +1,5 @@
 import express from 'express'
+import { randomInt, createHmac, timingSafeEqual } from 'node:crypto'
 import nodemailer from 'nodemailer'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -52,7 +53,7 @@ export function createApp(config) {
     db.prepare('INSERT INTO admins (email, password_hash) VALUES (?, ?)').run(config.adminEmail.toLowerCase(), hashPassword(config.adminPassword))
   }
 
-  const mailer = config.smtpUrl ? nodemailer.createTransport(config.smtpUrl) : null
+  const mailer = config.mailer ?? (config.smtpUrl ? nodemailer.createTransport(config.smtpUrl) : null)
   const trialDays = Number(config.trialDays ?? 2)
   const adminNotifyEmail = config.adminNotifyEmail || config.adminEmail
   async function sendMail(to, subject, text) {
@@ -204,22 +205,80 @@ export function createApp(config) {
     res.json({ status: 'trial', token, expiresAt })
   })
 
-  // Customer picks a plan in the app → stored, admin is emailed, customer gets an acknowledgement.
-  pub.post('/purchase-requests', rateLimit('purchase', 5, 60 * 60_000), async (req, res) => {
+  // ---------------------------------------------------------- OTP subscription activation
+  // Customer picks a plan → a 4-digit OTP is emailed to the vendor → vendor shares it (e.g. WhatsApp)
+  // after payment → customer enters it → subscription activates on that device. No license keys shown.
+  const otpHash = (id, code) => createHmac('sha256', sessionSecret).update(`${id}:${code}`).digest('hex')
+  const otpValidHours = Number(config.otpValidHours ?? 72)
+
+  pub.post('/subscriptions/request-otp', rateLimit('otp-request', 6, 60 * 60_000), async (req, res) => {
+    const deviceId = deviceIdOf(req.body.deviceId)
     const plan = db.prepare('SELECT * FROM plans WHERE code = ? AND active = 1').get(String(req.body.planCode ?? ''))
     if (!plan) throw new ApiError(400, 'Unknown plan')
-    const name = String(req.body.name ?? '').trim()
-    const email = String(req.body.email ?? '').trim().toLowerCase()
-    if (!name) throw new ApiError(400, 'Name is required')
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ApiError(400, 'A valid email is required')
-    const id = Number(db.prepare('INSERT INTO purchase_requests (plan_code, name, email, phone, message, device_id) VALUES (?,?,?,?,?,?)')
-      .run(plan.code, name.slice(0, 200), email, str(req.body.phone, 50), str(req.body.message, 1000), req.body.deviceId ? deviceIdOf(req.body.deviceId) : null).lastInsertRowid)
+    if (!mailer) throw new ApiError(503, 'Activation email is not configured on the server (SMTP_URL).', 'email_not_configured')
+    const name = str(req.body.name, 120)
+    const phone = str(req.body.phone, 40)
+    const code = String(randomInt(0, 10000)).padStart(4, '0')
+    const expires = new Date(Date.now() + otpValidHours * 3600_000).toISOString().replace('T', ' ').slice(0, 19)
+    const id = db.tx(() => {
+      db.prepare("UPDATE otp_requests SET status = 'replaced' WHERE device_id = ? AND status = 'pending'").run(deviceId)
+      const rid = Number(db.prepare('INSERT INTO otp_requests (device_id, device_name, plan_code, name, phone, code_hash, ip, expires_at) VALUES (?,?,?,?,?,?,?,?)')
+        .run(deviceId, str(req.body.deviceName), plan.code, name, phone, 'pending', req.ip, expires).lastInsertRowid)
+      db.prepare('UPDATE otp_requests SET code_hash = ? WHERE id = ?').run(otpHash(rid, code), rid)
+      return rid
+    })
     const price = `${plan.currency} ${plan.price.toLocaleString('en-US')}`
-    await sendMail(adminNotifyEmail, `New subscription request: ${plan.name} — ${name}`,
-      `New request #${id}\n\nPlan: ${plan.name} (${price} / ${plan.duration_label})\nName: ${name}\nEmail: ${email}\nPhone: ${req.body.phone ?? '-'}\nMessage: ${req.body.message ?? '-'}\n\nIssue the license from the admin console (Requests → Issue license); the key is emailed to the customer automatically.`)
-    await sendMail(email, `We received your request for ${plan.name}`,
-      `Hello ${name},\n\nThanks for choosing ${plan.name} (${price} / ${plan.duration_label}). We'll contact you with payment details, and your license key will be emailed to this address once confirmed.\n\nTo activate: click the subscription button at the top of the app → paste the key → Activate.\n`)
-    res.status(201).json({ ok: true, id, emailed: !!mailer })
+    const status = await sendMail(adminNotifyEmail, `OTP ${code} — ${plan.name} activation request`,
+      [`Activation OTP: ${code}`, '', `Plan: ${plan.name} (${price} / ${plan.duration_label})`, `Customer: ${name || '-'}`, `Phone/WhatsApp: ${phone || '-'}`,
+       `Device: ${req.body.deviceName ?? '-'} (${deviceId.slice(0, 8)}…)`, `Request #${id} · valid for ${otpValidHours} hours`, '',
+       'After payment, send this OTP to the customer (e.g. on WhatsApp). Entering it in the app activates the plan on their computer.'].join('\n'))
+    if (status !== 'sent') {
+      db.prepare("UPDATE otp_requests SET status = 'replaced' WHERE id = ?").run(id)
+      throw new ApiError(502, 'Could not send the activation email. Please try again later.', 'email_failed')
+    }
+    res.status(201).json({ ok: true, requestId: id, plan: plan.code, expiresAt: toIso(expires) })
+  })
+
+  pub.post('/subscriptions/verify-otp', rateLimit('otp-verify', 20, 60 * 60_000), (req, res) => {
+    const deviceId = deviceIdOf(req.body.deviceId)
+    const code = String(req.body.code ?? '').trim()
+    if (!/^\d{4}$/.test(code)) throw new ApiError(400, 'Enter the 4-digit code', 'bad_code')
+    const r = db.prepare("SELECT * FROM otp_requests WHERE device_id = ? AND status = 'pending' ORDER BY id DESC LIMIT 1").get(deviceId)
+    if (!r) throw new ApiError(404, 'No pending activation for this computer. Choose a plan and click Activate first.', 'no_request')
+    if (Date.parse(toIso(r.expires_at)) < Date.now()) throw new ApiError(410, 'This code has expired. Click Activate again to get a new one.', 'otp_expired')
+    const a = Buffer.from(otpHash(r.id, code))
+    const b = Buffer.from(r.code_hash)
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
+      const attempts = r.attempts + 1
+      db.prepare("UPDATE otp_requests SET attempts = ?, status = CASE WHEN ? >= 5 THEN 'locked' ELSE status END WHERE id = ?").run(attempts, attempts, r.id)
+      throw new ApiError(400, attempts >= 5 ? 'Too many wrong codes. Click Activate again to get a new code.' : `Wrong code. ${5 - attempts} attempt${5 - attempts === 1 ? '' : 's'} left.`, attempts >= 5 ? 'otp_locked' : 'wrong_code')
+    }
+    const plan = db.prepare('SELECT * FROM plans WHERE code = ?').get(r.plan_code)
+    const license = db.tx(() => {
+      // Renewal: if this device already has a license, extend it; otherwise create one (internal key, never shown).
+      const existing = db.prepare('SELECT l.* FROM licenses l JOIN activations a ON a.license_id = l.id WHERE a.device_id = ? AND a.active = 1 ORDER BY l.id DESC LIMIT 1').get(deviceId)
+      let id
+      if (existing) {
+        const base = existing.expires_at && new Date(toIso(existing.expires_at)) > new Date() ? new Date(toIso(existing.expires_at)) : new Date()
+        const exp = plan.duration_months ? addMonths(base, plan.duration_months).toISOString().replace('T', ' ').slice(0, 19) : null
+        db.prepare("UPDATE licenses SET plan_id = ?, expires_at = ?, status = 'active', updated_at = datetime('now') WHERE id = ?").run(plan.id, exp, existing.id)
+        event(existing.id, 'renewed', { plan: plan.code, via: 'otp', request: r.id })
+        id = existing.id
+      } else {
+        let key
+        do key = generateLicenseKey()
+        while (db.prepare('SELECT 1 FROM licenses WHERE license_key = ?').get(key))
+        const exp = plan.duration_months ? addMonths(new Date(), plan.duration_months).toISOString().replace('T', ' ').slice(0, 19) : null
+        id = Number(db.prepare('INSERT INTO licenses (license_key, plan_id, customer_name, max_devices, expires_at, notes) VALUES (?,?,?,?,?,?)')
+          .run(key, plan.id, r.name, plan.max_devices, exp, r.phone ? `Phone: ${r.phone}` : null).lastInsertRowid)
+        db.prepare('INSERT INTO activations (license_id, activation_id, device_id, device_name, platform, app_version, ip) VALUES (?,?,?,?,?,?,?)')
+          .run(id, newActivationId(), deviceId, r.device_name, str(req.body.platform, 50), str(req.body.appVersion, 30), req.ip)
+        event(id, 'created', { plan: plan.code, via: 'otp', request: r.id })
+      }
+      db.prepare("UPDATE otp_requests SET status = 'activated', license_id = ? WHERE id = ?").run(id, r.id)
+      return db.prepare('SELECT * FROM licenses WHERE id = ?').get(id)
+    })
+    res.json({ status: 'active', licenseKey: license.license_key, token: issueToken(license, deviceId), expiresAt: toIso(license.expires_at) })
   })
   app.use('/api/v1', pub)
 
@@ -244,7 +303,7 @@ export function createApp(config) {
       active: one("SELECT COUNT(*) n FROM licenses WHERE status = 'active' AND (expires_at IS NULL OR expires_at > datetime('now'))"),
       expired: one("SELECT COUNT(*) n FROM licenses WHERE expires_at IS NOT NULL AND expires_at <= datetime('now')"),
       trials: one('SELECT COUNT(*) n FROM trials'),
-      newRequests: one("SELECT COUNT(*) n FROM purchase_requests WHERE status = 'new'"),
+      newRequests: one("SELECT COUNT(*) n FROM otp_requests WHERE status = 'pending' AND expires_at > datetime('now')"),
       devices: one('SELECT COUNT(*) n FROM activations WHERE active = 1'),
       byPlan: db.prepare('SELECT p.name, COUNT(l.id) n FROM plans p LEFT JOIN licenses l ON l.plan_id = p.id GROUP BY p.id ORDER BY p.sort').all()
     })
@@ -299,7 +358,6 @@ export function createApp(config) {
     const id = Number(db.prepare('INSERT INTO licenses (license_key, plan_id, customer_name, customer_email, max_devices, expires_at, notes) VALUES (?,?,?,?,?,?,?)')
       .run(key, plan.id, str(req.body.customerName), email, Math.max(1, Number(req.body.maxDevices ?? plan.max_devices) | 0), expires ? expires.toISOString().replace('T', ' ').slice(0, 19) : null, str(req.body.notes, 2000)).lastInsertRowid)
     event(id, 'created', { plan: plan.code }, `admin:${req.adminId}`)
-    if (req.body.requestId) db.prepare("UPDATE purchase_requests SET status = 'fulfilled', license_id = ? WHERE id = ?").run(id, Number(req.body.requestId))
     const l = db.prepare('SELECT * FROM licenses WHERE id = ?').get(id)
     if (req.body.sendEmail !== false) await notify(l, 'created', `created:${id}`)
     res.status(201).json({ id, licenseKey: key, expiresAt: toIso(l.expires_at) })
@@ -337,13 +395,8 @@ export function createApp(config) {
     res.json({ ok: true })
   })
   admin.get('/requests', (_req, res) => {
-    res.json({ requests: db.prepare("SELECT r.*, l.license_key FROM purchase_requests r LEFT JOIN licenses l ON l.id = r.license_id ORDER BY r.status = 'new' DESC, r.id DESC LIMIT 300").all() })
-  })
-  admin.post('/requests/:id/status', (req, res) => {
-    const status = String(req.body.status)
-    if (!['new', 'fulfilled', 'dismissed'].includes(status)) throw new ApiError(400, 'Invalid status')
-    db.prepare('UPDATE purchase_requests SET status = ? WHERE id = ?').run(status, Number(req.params.id))
-    res.json({ ok: true })
+    res.json({ requests: db.prepare(`SELECT r.id, r.device_id, r.device_name, r.plan_code, r.name, r.phone, r.attempts, r.status, r.expires_at, r.created_at, l.expires_at license_expires
+      FROM otp_requests r LEFT JOIN licenses l ON l.id = r.license_id ORDER BY r.id DESC LIMIT 300`).all() })
   })
   admin.delete('/activations/:id', (req, res) => {
     const a = db.prepare('SELECT * FROM activations WHERE id = ?').get(Number(req.params.id))

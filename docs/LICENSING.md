@@ -2,15 +2,17 @@
 
 `apps/license-server` is a new, independent service (Node ≥ 22.13, Express 5, SQLite). It has no connection to the original Lead Getter's activation backend.
 
-## Customer flow
+## Customer flow (no license keys)
 
-1. **First launch** — the app asks the server for a free trial (`POST /api/v1/trial`). One trial per device (by device id), length `TRIAL_DAYS` (default **2 days**). Reinstalling does not reset it.
+1. **First launch** — a free trial starts automatically (`POST /api/v1/trial`): one per device, `TRIAL_DAYS` (default **2**). Reinstalling does not reset it.
 2. **Top-bar button** shows *Free trial · N days left*, then *Trial ended — Subscribe*. Clicking it (or the sidebar account card) opens the plans popup.
-3. **Choose plan** → name, email, phone, message → `POST /api/v1/purchase-requests`. The server emails the request to `ADMIN_NOTIFY_EMAIL` (or `ADMIN_EMAIL`) and a confirmation to the customer, via SMTP.
-4. After payment you open the admin console → **Subscription requests → Issue license & email key**. The key is emailed to the customer.
-5. The customer pastes the key into the popup → **Activate**. The trial is replaced by the paid plan.
+3. Customer picks a plan → optional name + WhatsApp number → **Activate** (`POST /api/v1/subscriptions/request-otp`). The server generates a **4-digit OTP** and emails it to `ADMIN_NOTIFY_EMAIL` via SMTP, with the plan, customer name, WhatsApp number and computer name.
+4. After payment you send the OTP to the customer (WhatsApp or any channel).
+5. Customer types the OTP in the popup (`POST /api/v1/subscriptions/verify-otp`) → the plan is active on that computer. Activating again on the same computer **extends** the current subscription.
 
-SMTP (`SMTP_URL`) must be configured for steps 3–4; without it requests are still stored and visible in the admin console, but no emails are sent.
+OTP rules: valid `OTP_VALID_HOURS` (default 72 h), single use, bound to the computer that requested it, 5 wrong attempts lock it (customer clicks *Request a new code*), a new request replaces the previous code. Only an HMAC of the code is stored; the code itself exists only in your email.
+
+**SMTP is required** for activation. The Gmail credentials live only in `apps/license-server/.env` (git-ignored) — never in the desktop app, where anyone could extract them.
 
 ## Design
 
@@ -62,14 +64,15 @@ npm run dist:linux        # or dist:win / dist:mac
 | POST | `/api/v1/licenses/validate` | `{licenseKey, deviceId}` | same as activate | 403 `not_activated`/status, 410 `expired` |
 | POST | `/api/v1/licenses/deactivate` | `{licenseKey, deviceId}` | `{ok:true}` | |
 | POST | `/api/v1/trial` | `{deviceId, deviceName?}` | `{status:'trial', token, expiresAt}` | 410 `trial_used` |
-| POST | `/api/v1/purchase-requests` | `{planCode, name, email, phone?, message?, deviceId?}` | `{ok, id, emailed}` | 400 invalid; limited to 5/hour/IP |
+| POST | `/api/v1/subscriptions/request-otp` | `{planCode, deviceId, deviceName?, name?, phone?}` | `{ok, requestId, plan, expiresAt}` | 400, 502 email failed, 503 SMTP not configured; 6/hour/IP |
+| POST | `/api/v1/subscriptions/verify-otp` | `{deviceId, code}` | `{status, token, expiresAt}` | 400 `wrong_code`/`otp_locked`, 404 `no_request`, 410 `otp_expired`; 20/hour/IP |
 
 ## Admin API (Bearer token from `/api/admin/login`)
 
-`POST /login {email,password}` · `GET /stats` · `GET|POST /plans` · `PATCH /plans/:id` · `GET /licenses?search=` · `GET /licenses/:id` (activations, history, emails) · `POST /licenses {planCode, customerName?, customerEmail?, maxDevices?, notes?, sendEmail?}` · `PATCH /licenses/:id` · `POST /licenses/:id/renew {planCode?}` · `POST /licenses/:id/status {status: active|suspended|revoked}` · `DELETE /activations/:id` · `GET /requests` · `POST /requests/:id/status {status: new|fulfilled|dismissed}` (creating a license with `requestId` marks the request fulfilled)
+`POST /login {email,password}` · `GET /stats` · `GET|POST /plans` · `PATCH /plans/:id` · `GET /licenses?search=` · `GET /licenses/:id` (activations, history, emails) · `POST /licenses {planCode, customerName?, customerEmail?, maxDevices?, notes?, sendEmail?}` · `PATCH /licenses/:id` · `POST /licenses/:id/renew {planCode?}` · `POST /licenses/:id/status {status: active|suspended|revoked}` · `DELETE /activations/:id` · `GET /requests` (OTP activation requests)
 
 The admin console is served at `/admin/`.
 
 ## Database (license server)
 
-`plans`, `licenses` (key, plan, customer, status, max devices, starts/expires), `activations` (activation id, device id/name/platform/version, IP, active, timestamps), `license_events` (activation history and admin actions), `admins`, `notifications`, `trials` (one per device), `purchase_requests`.
+`plans`, `licenses` (key, plan, customer, status, max devices, starts/expires), `activations` (activation id, device id/name/platform/version, IP, active, timestamps), `license_events` (activation history and admin actions), `admins`, `notifications`, `trials` (one per device), `otp_requests` (hashed codes, attempts, status).

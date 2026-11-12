@@ -12,7 +12,7 @@ AI-powered lead generation and automated sales platform — a **new, independent
 | Email | Multiple SMTP accounts, IMAP reply & bounce tracking, sequences (initial + 3 follow-ups that stop on reply/unsubscribe/not-interested), suppression list |
 | Inbox | Unified WhatsApp + email conversations, three-panel workspace, approvals inline |
 | Dashboard | Live command center from real records with date ranges |
-| Subscription | 2-day free trial on first launch (one per device). A small top-bar button opens the plans popup; the customer requests a plan, you are emailed (SMTP), you issue the key from the admin console and it is emailed to the customer, who pastes it into the same popup. Backend: `apps/license-server` (Ed25519-signed, device-bound, 3 configurable plans: PKR 4,500 / 15,000 / 50,000) |
+| Subscription | 2-day free trial on first launch (one per device). A top-bar button opens the plans popup → **Activate** emails a 4-digit OTP to you (SMTP) → you share it with the customer (e.g. WhatsApp) → they enter it and the plan activates. No license keys. Backend: `apps/license-server` (Ed25519-signed, device-bound, plans PKR 4,500 / 15,000 / 50,000) |
 
 ## Repository layout
 
@@ -45,7 +45,7 @@ LICENSE_PUBLIC_KEY="$(cd ../license-server && npm run -s print-public-key)" npm 
 
 > `npm run dev` / `npm start` clear `ELECTRON_RUN_AS_NODE` automatically (VS Code terminals set it, which otherwise makes Electron start as plain Node).
 
-Then: the app starts a 2-day trial automatically (top-right button). To test a paid plan, request it from the popup, issue it in the admin console (**Subscription requests → Issue license**) and paste the emailed key into the popup → configure integrations in **Settings** and an AI provider in **AI Sales Agent → AI providers**.
+Then: the app starts a 2-day trial automatically (top-right button). To test a paid plan: popup → **Activate** → the OTP arrives at `ADMIN_NOTIFY_EMAIL` → enter it in the popup → configure integrations in **Settings** and an AI provider in **AI Sales Agent → AI providers**.
 
 ## Documentation
 

@@ -1,5 +1,6 @@
 # Testing report — 12 Nov 2026
 
+> Real OTP email sent through Gmail SMTP on 12 Nov 2026 (server accepted, 201).
 > Updated after removing Analytics, Podcasts, Website Emails and the License page, and adding the free trial + top-bar subscription popup.
 
 ## How to run
@@ -15,9 +16,9 @@ cd apps/license-server && npm test                       # 7 API tests
 | Suite | Result |
 |---|---|
 | Desktop typecheck (main + renderer, TypeScript 7) | ✅ clean |
-| Desktop unit/integration (`vitest`) | ✅ 44 / 44 |
+| Desktop unit/integration (`vitest`) | ✅ 41 / 41 |
 | Desktop live (`test:live`) | ✅ 3 / 3 |
-| License server (`node --test`) | ✅ 9 / 9 |
+| License server (`node --test`) | ✅ 10 / 10 |
 | Production build (`electron-vite build`) | ✅ |
 | Linux installers (AppImage, .deb) | ✅ built; packaged binary launched, created its own database and ran migrations |
 | Visual QA | ✅ real Electron window, 12 pages × light/dark captured and reviewed |
@@ -51,7 +52,7 @@ Legend: ✅ verified · 🧪 verified with a local stand-in for the external ser
 | 22 | Email campaigns | 🧪 | Recipients, skip reasons, sending, pause/resume/stop, cross-campaign dedupe, suppression, daily limits. |
 | 23 | Email follow-ups | 🧪 | Scheduled follow-ups, `Re:` threading, stop on reply, completion. |
 | 24 | Conversation history | ✅ | Inbound/outbound recording, duplicate delivery ignored, opt-out handling. |
-| 25 | Subscription activation | ✅ | Desktop client ↔ real license server: automatic 2-day trial, trial cannot be restarted after reinstall, plan request, key activation, validate, deactivate, device limit, tamper detection. |
+| 25 | Subscription activation | ✅ | Desktop client ↔ real license server: automatic 2-day trial, trial cannot be restarted after reinstall, OTP activation (wrong code, lock after 5, single use, other computer rejected, renewal extends), validate, deactivate, device limit, tamper detection. |
 | 26 | Subscription expiration | ✅ | Expired → 410, revocation reflected on next validation, renewal extends from current expiry. |
 | 27–28 | Light / dark mode | ✅ | Screenshots of every major page in both themes. |
 | 29 | Database persistence | ✅ | Migrations, WAL, job checkpoint recovery after simulated crash, packaged app DB creation. |

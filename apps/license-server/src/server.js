@@ -25,7 +25,8 @@ const { app, publicKeyPem, runReminders } = createApp({
   mailFrom: process.env.MAIL_FROM ?? 'Lead Getter Enterprise <licenses@example.com>',
   trustProxy: process.env.TRUST_PROXY === '1',
   trialDays: Number(process.env.TRIAL_DAYS ?? 2),
-  adminNotifyEmail: process.env.ADMIN_NOTIFY_EMAIL
+  adminNotifyEmail: process.env.ADMIN_NOTIFY_EMAIL,
+  otpValidHours: Number(process.env.OTP_VALID_HOURS ?? 72)
 })
 
 const port = Number(process.env.PORT ?? 8787)

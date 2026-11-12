@@ -260,7 +260,8 @@ const handlers: Record<string, Handler> = {
   'license:deactivate': () => license.deactivate(),
   'license:plans': () => license.plans(),
   'license:startTrial': () => license.startTrial(),
-  'license:requestPlan': (input) => license.requestPlan(input),
+  'license:requestOtp': (input) => license.requestOtp(input),
+  'license:verifyOtp': (code: string) => license.verifyOtp(code),
 
   // ------------------------------------------------------------ data control
   'data:wipe': (confirm: string) => {

@@ -80,18 +80,22 @@ CREATE TABLE IF NOT EXISTS trials (
   started_at TEXT NOT NULL DEFAULT (datetime('now')),
   expires_at TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS purchase_requests (
+CREATE TABLE IF NOT EXISTS otp_requests (
   id INTEGER PRIMARY KEY,
+  device_id TEXT NOT NULL,
+  device_name TEXT,
   plan_code TEXT NOT NULL,
-  name TEXT NOT NULL,
-  email TEXT NOT NULL,
+  name TEXT,
   phone TEXT,
-  message TEXT,
-  device_id TEXT,
-  status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','fulfilled','dismissed')),
+  code_hash TEXT NOT NULL,             -- HMAC of the 4-digit code; the code itself is only emailed
+  attempts INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','activated','replaced','locked')),
   license_id INTEGER REFERENCES licenses(id) ON DELETE SET NULL,
+  ip TEXT,
+  expires_at TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE INDEX IF NOT EXISTS ix_otp_device ON otp_requests(device_id, status);
 `
 
 // Default packages. Prices, durations, device limits and features are editable from the admin API/UI.

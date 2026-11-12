@@ -146,11 +146,24 @@ export async function startTrial() {
   return licenseStatus()
 }
 
-/** Sends a plan request; the server emails it to the vendor (SMTP) and acknowledges to the customer. */
-export async function requestPlan(input: { planCode: string; name: string; email: string; phone?: string; message?: string }) {
-  if (!input.name?.trim()) throw new Error('Please enter your name.')
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email ?? '')) throw new Error('Please enter a valid email address.')
-  return post('/api/v1/purchase-requests', { ...input, deviceId: deviceId() })
+/** Asks the server to email a 4-digit activation OTP to the vendor for the chosen plan. */
+export async function requestOtp(input: { planCode: string; name?: string; phone?: string }) {
+  return post('/api/v1/subscriptions/request-otp', {
+    planCode: input.planCode,
+    name: input.name?.trim() || undefined,
+    phone: input.phone?.trim() || undefined,
+    deviceId: deviceId(),
+    deviceName: os.hostname()
+  })
+}
+
+/** Verifies the OTP the vendor shared; on success the subscription is active on this computer. */
+export async function verifyOtp(code: string) {
+  const c = String(code ?? '').replace(/\D/g, '')
+  if (c.length !== 4) throw new Error('Enter the 4-digit code.')
+  const r = await post('/api/v1/subscriptions/verify-otp', { code: c, deviceId: deviceId(), platform: `${process.platform}-${process.arch}`, appVersion: process.env.npm_package_version ?? '1.0.0' })
+  store(r.licenseKey, r.token, r.status)
+  return licenseStatus()
 }
 
 export async function validate(): Promise<ReturnType<typeof licenseStatus>> {

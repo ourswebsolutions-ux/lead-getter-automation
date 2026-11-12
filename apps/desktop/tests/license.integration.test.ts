@@ -11,12 +11,13 @@ describe('desktop ↔ license server', () => {
   let lic: typeof import('../src/main/services/license')
   let adminToken: string
   let base: string
+  const mails: any[] = []
 
   beforeAll(async () => {
     // @ts-expect-error plain JS module from the sibling package
     const { createApp } = await import('../../license-server/src/app.js')
     const dir = mkdtempSync(join(tmpdir(), 'lge-int-'))
-    ctx = createApp({ dbFile: join(dir, 'db.sqlite'), keyFile: join(dir, 'k.pem'), sessionSecret: 's'.repeat(40), adminEmail: 'a@t.io', adminPassword: 'a-long-password!' })
+    ctx = createApp({ dbFile: join(dir, 'db.sqlite'), keyFile: join(dir, 'k.pem'), sessionSecret: 's'.repeat(40), adminEmail: 'a@t.io', adminPassword: 'a-long-password!', mailer: { sendMail: async (m: any) => { mails.push(m) } } })
     server = ctx.app.listen(0)
     await new Promise((r) => server.once('listening', r))
     base = `http://127.0.0.1:${server.address().port}`
@@ -76,11 +77,14 @@ describe('desktop ↔ license server', () => {
     freshDb()
     expect((await lic.validate()).state).toBe('trial_expired')
     expect(lic.isLicensed()).toBe(false)
-    // A plan request reaches the server, and activating the issued key unlocks the app.
-    const req: any = await lic.requestPlan({ planCode: 'lifetime', name: 'Ali', email: 'ali@shop.pk' })
+    // Activate a plan with the OTP that the vendor receives by email.
+    const req: any = await lic.requestOtp({ planCode: 'lifetime', name: 'Ali', phone: '+92300' })
     expect(req.ok).toBe(true)
-    const { licenseKey } = await issue('lifetime')
-    expect((await lic.activate(licenseKey)).state).toBe('active')
+    const code = /OTP (\d{4})/.exec(mails.at(-1).subject)![1]
+    await expect(lic.verifyOtp('0000' === code ? '1111' : '0000')).rejects.toThrow(/Wrong code/)
+    const st = await lic.verifyOtp(code)
+    expect(st.state).toBe('active')
+    expect(st.plan).toBe('lifetime')
     expect(lic.isLicensed()).toBe(true)
   })
 
