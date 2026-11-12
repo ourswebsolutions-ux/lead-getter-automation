@@ -26,7 +26,7 @@ const STATUS: Record<string, [string, string]> = {
 
 // Verification result → text colour only: exists (green), risky (yellow), does not exist (red).
 const EMAIL_COLOR: Record<string, string | undefined> = { safe: 'var(--green)', risky: 'var(--amber)', invalid: 'var(--red)' }
-const EMAIL_LABEL: Record<string, string> = { safe: 'mailbox exists', risky: 'risky (server accepts every address)', invalid: 'does not exist', unknown: 'could not be verified' }
+const EMAIL_LABEL: Record<string, string> = { safe: 'verified', risky: 'risky (server accepts every address)', invalid: 'does not exist', unknown: 'could not be verified' }
 
 interface Bg {
   autoFindEmails: boolean
@@ -130,7 +130,7 @@ export function MapsPage() {
     {
       key: 'email', header: 'Email', sortable: true, width: '14%',
       render: (r) =>
-        r.email ? <span className="truncate" style={{ display: 'block', color: EMAIL_COLOR[r.email_status] }} title={`${r.emails}${EMAIL_LABEL[r.email_status] ? ` — ${EMAIL_LABEL[r.email_status]}` : ''}${r.email_status === 'unknown' && r.email_reason ? ` (${r.email_reason})` : ''}`}>{r.email}</span>
+        r.email ? <span className="truncate" style={{ display: 'block', color: EMAIL_COLOR[r.email_status] }} title={`${r.emails}${r.email_reason ? ` — ${r.email_reason}` : EMAIL_LABEL[r.email_status] ? ` — ${EMAIL_LABEL[r.email_status]}` : ''}`}>{r.email}</span>
         : r.website_status !== 'has_website' ? <span className="faint" title="Emails are found on business websites; this business has none on Google Maps.">No website</span>
         : !r.email_note ? <span className="faint">—</span>
         : <span className="faint" title={r.email_note}>{/could not|does not allow/.test(r.email_note) ? 'Site blocks reading' : 'Not published'}</span>

@@ -13,6 +13,8 @@ import os from 'node:os'
  *   catch_all  the server accepts every address (cannot be confirmed)       → yellow
  *   invalid    the mailbox or the domain's mail server does not exist       → red
  *   unknown    no clear answer (port 25 blocked, greylisting, policy)       → no colour
+ * When the mailbox gets no clear answer, the domain decides (see checkDomain): a working mail server
+ * → verified (green, "domain verified"); no mail server → invalid (red).
  */
 
 export type VerifyStatus = 'verified' | 'catch_all' | 'invalid' | 'unknown'
@@ -113,6 +115,7 @@ interface DomainInfo {
   hosts: string[]
   error: string | null
   catchAll?: boolean | null
+  resolvable?: boolean
 }
 
 export class EmailVerifier {
@@ -157,8 +160,51 @@ export class EmailVerifier {
     }
   }
 
-  /** Checks several addresses at one domain in one conversation. */
+  /**
+   * Checks several addresses at one domain: first the mailbox (SMTP); when the mail server will not
+   * answer (common for business mail on Microsoft/Zoho/GoDaddy from home connections), the domain
+   * decides: a domain with a working mail server is accepted (green), one without is invalid (red).
+   */
   async checkDomain(domain: string, emails: string[]): Promise<Map<string, VerifyResult>> {
+    const out = await this.checkMailboxes(domain, emails)
+    if (![...out.values()].some((r) => r.status === 'unknown')) return out
+    const usable = await this.domainAcceptsMail(domain)
+    for (const [e, r] of out) {
+      if (r.status !== 'unknown') continue
+      if (usable === true) out.set(e, { status: 'verified', reason: `domain verified: ${domain} has a working mail server (the mailbox itself was not confirmed because ${r.reason})` })
+      else if (usable === false) out.set(e, { status: 'invalid', reason: `the mail server of ${domain} does not exist on the internet` })
+    }
+    return out
+  }
+
+  /** true: the domain has a mail server whose address resolves; false: it does not; null: DNS failed. */
+  private async domainAcceptsMail(domain: string): Promise<boolean | null> {
+    let info = this.domains.get(domain)
+    if (!info) {
+      info = await this.mxOf(domain)
+      this.domains.set(domain, info)
+    }
+    if (info.error === 'no_mail_server') return false
+    if (info.error) return null
+    if (info.resolvable !== undefined) return info.resolvable
+    const dns = this.opts.dns ?? dnsPromises
+    for (const host of info.hosts.slice(0, 3)) {
+      try {
+        if ((await dns.resolve4(host)).length) return (info.resolvable = true)
+      } catch {
+        /* try the next mail server */
+      }
+      try {
+        if ((await (dns as typeof dnsPromises).resolve6?.(host))?.length) return (info.resolvable = true)
+      } catch {
+        /* no IPv6 either */
+      }
+    }
+    return (info.resolvable = false)
+  }
+
+  /** Asks the mail server about each mailbox (the original Lead Finder check). */
+  private async checkMailboxes(domain: string, emails: string[]): Promise<Map<string, VerifyResult>> {
     const out = new Map<string, VerifyResult>()
     const pending = [...new Set(emails.map((e) => e.toLowerCase()))].filter((e) => {
       const cached = this.results.get(e)

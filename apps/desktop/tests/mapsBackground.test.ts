@@ -45,7 +45,13 @@ const dns = {
     if (d === 'nomail.pk') throw Object.assign(new Error('x'), { code: 'ENOTFOUND' })
     return [{ exchange: `mx.${d}`, priority: 10 }]
   },
-  resolve4: async () => [] as string[]
+  resolve4: async (h: string) => {
+    if (h === 'nomail.pk' || h === 'mx.deadmx.pk') throw Object.assign(new Error('x'), { code: 'ENOTFOUND' })
+    return ['127.0.0.1']
+  },
+  resolve6: async () => {
+    throw Object.assign(new Error('x'), { code: 'ENODATA' })
+  }
 }
 const makeVerifier = () => new EmailVerifier({ dns: dns as any, port, hostFor: () => '127.0.0.1', helo: 'test.local', timeout: 3000 })
 
@@ -57,9 +63,13 @@ describe('free SMTP email verification (ported from Lead Finder)', () => {
     expect(a.get('info@shop.pk')!.status).toBe('verified')
     expect(a.get('ghost@shop.pk')!.status).toBe('invalid')
     expect((await v.checkDomain('catchall.pk', ['anyone@catchall.pk'])).get('anyone@catchall.pk')!.status).toBe('catch_all')
+    // The server refuses to answer (spam-list policy): the domain decides → it has a working mail server → verified.
     const pol = (await v.checkDomain('policy.pk', ['info@policy.pk'])).get('info@policy.pk')!
-    expect(pol.status).toBe('unknown')
-    expect(pol.reason).toMatch(/spam list/)
+    expect(pol.status).toBe('verified')
+    expect(pol.reason).toMatch(/^domain verified: policy\.pk has a working mail server.*spam list/)
+    // MX record points to a mail server that does not exist → invalid.
+    const dead = new EmailVerifier({ dns: dns as any, port: 1, hostFor: () => '127.0.0.1', helo: 'x', timeout: 500 })
+    expect((await dead.checkDomain('deadmx.pk', ['info@deadmx.pk'])).get('info@deadmx.pk')!.status).toBe('invalid')
     expect((await v.checkDomain('nomail.pk', ['info@nomail.pk'])).get('info@nomail.pk')!.status).toBe('invalid')
     expect(validSyntax('bad@@x.pk')).toBe(false)
   })
