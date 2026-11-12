@@ -23,7 +23,7 @@ Notes:
 
 * No native Node modules are used (SQLite comes from Node's built-in `node:sqlite`), so the same source builds on every OS without rebuild steps.
 * **Code signing**: for Windows set `CSC_LINK`/`CSC_KEY_PASSWORD` (Authenticode certificate); for macOS set your Developer ID identity plus notarization (`APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`). Unsigned builds work but show SmartScreen/Gatekeeper warnings.
-* Building Windows installers on Linux without wine requires `-c.win.signAndEditExecutable=false` (the exe then has no embedded icon/version metadata). Prefer building on Windows or in CI (`windows-latest`).
+* Building the Windows NSIS installer on Linux requires **wine** (installer creation and exe resource editing both use it). Without wine, `-c.win.signAndEditExecutable=false` still packages the app folder (`win-unpacked`) but not the installer. Prefer building on Windows or in CI (`windows-latest`).
 * **Auto-updates**: `electron-updater` is wired in (checks on start, notifies the UI, never auto-downloads). Set `publish.url` in `electron-builder.yml` to where you host `latest*.yml` + installers.
 * The app stores data in its own directory (`lead-getter-enterprise`) and uses its own app id (`com.leadgetter.enterprise`), so it installs side-by-side with the original Lead Getter.
 
