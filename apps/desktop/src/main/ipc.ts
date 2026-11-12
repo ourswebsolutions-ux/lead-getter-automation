@@ -150,6 +150,8 @@ const handlers: Record<string, Handler> = {
   'maps:results': (filter, opts) => gmaps.listResults(filter ?? {}, opts),
   'maps:categories': () => gmaps.resultCategories(),
   'maps:delete': (ids: number[]) => gmaps.deleteResults(ids),
+  'maps:bgStatus': () => gmaps.backgroundStatus(),
+  'maps:setOptions': (patch) => gmaps.setMapsOptions(patch),
   'maps:export': async (input: { filter?: any; ids?: number[]; format: 'csv' | 'xlsx' }, _e?: any, win?: BrowserWindow) => {
     const rows = gmaps.resultRowsForExport(input.filter ?? {}, input.ids).map((r: any, i: number) => ({ ...r, n: i + 1, status: WEBSITE_STATUS[r.website_status] ?? r.website_status }))
     if (!rows.length) throw new Error('No results to export')

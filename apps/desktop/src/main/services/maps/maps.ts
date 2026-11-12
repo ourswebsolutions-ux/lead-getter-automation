@@ -317,3 +317,44 @@ export async function readWebEvidence(page: Page, q: string) {
     return { blocked: false as const, knowledgePanelWebsite: site?.href || '', resultUrls: [...new Set(results)].slice(0, 10), hasResults: Boolean(document.querySelector('#search, #rso')) }
   })
 }
+
+/**
+ * Reads a website in Chrome (for sites that build their pages with JavaScript, where a plain
+ * download shows nothing): the home page, then its contact/about pages. Returns the rendered HTML.
+ */
+export async function readSiteInChrome(page: Page, website: string, maxPages = 4, allowed: (url: string) => boolean = () => true): Promise<{ url: string; html: string }[]> {
+  const out: { url: string; html: string }[] = []
+  const read = async (url: string) => {
+    try {
+      const res = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 25_000 })
+      if (res && res.status() >= 400) return null
+      await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {})
+      await page.waitForTimeout(800)
+      return { url: page.url(), html: await page.content() }
+    } catch {
+      await page.waitForLoadState('load', { timeout: 8000 }).catch(() => {})
+      return null
+    }
+  }
+  const home = await read(website)
+  if (!home) return out
+  out.push(home)
+  const origin = new URL(home.url).origin
+  const linked = await page
+    .evaluate(() =>
+      [...document.querySelectorAll<HTMLAnchorElement>('a[href]')]
+        .map((a) => ({ href: a.href.split('#')[0], text: (a.textContent || '').trim().slice(0, 60) }))
+        .filter((l) => /contact|about|reach|get-in-touch|enquir|inquir/i.test(`${l.href} ${l.text}`))
+        .map((l) => l.href)
+    )
+    .catch(() => [] as string[])
+  const candidates = [...new Set([...linked.filter((h) => h.startsWith(origin)), ...['/contact', '/contact-us', '/about-us'].map((p) => origin + p)])]
+    .sort((a, b) => Number(/about/i.test(a)) - Number(/about/i.test(b)))
+  for (const url of candidates) {
+    if (out.length >= maxPages) break
+    if (!allowed(url) || out.some((p) => p.url.replace(/\/$/, '') === url.replace(/\/$/, ''))) continue
+    const p = await read(url)
+    if (p) out.push(p)
+  }
+  return out
+}

@@ -2,10 +2,8 @@ import type { Page } from 'playwright-core'
 import { db } from '../../db'
 import { bus } from '../../core/events'
 import { logger } from '../../core/logger'
-import { getSettings } from '../../core/settings'
 import { upsertLead, attachEmail, categorize } from '../leads'
-import { crawlSite } from '../sources/website'
-import { queueVerification } from '../verification'
+import { findSiteEmails, hostOf } from './emailFinder'
 import * as maps from './maps'
 import { classifyWebsite, socialLinksOf, ownSiteOf, judgeWebPresence, presenceQuery, keepFor, placeKey, cleanMapsUrl, buildQuery, type BusinessType, type WebsiteStatus } from './rules'
 import type { ChromeSession } from './chrome'
@@ -309,49 +307,41 @@ export class MapsSearch {
     }
   }
 
-  /** Reads the business website (robots.txt respected) for public emails. Each site is read once. */
+  /** Reads the business website for public emails (plain read, then Chrome for JavaScript sites). Each site is read once. */
   private async findEmails(leadId: number, key: string, website: string, name: string) {
-    let host = ''
-    try {
-      host = new URL(/^https?:/i.test(website) ? website : `https://${website}`).hostname.replace(/^www\./, '')
-    } catch {
-      return
-    }
+    const host = hostOf(website)
+    if (!host) return
     this.status('running', `Looking for emails on ${host}`)
-    let emails = this.emailSites.get(host)
+    let found = this.emailSites.get(host)
     let note = ''
-    if (!emails) {
+    if (!found) {
       try {
-        const res = await this.op(() => crawlSite(website, { maxPages: 6, respectRobots: true, delayMs: 300, signal: this.signal }))
-        // The crawler already ranks business-domain and sales/contact addresses first.
-        emails = res.emails.map((e) => e.email).slice(0, 5)
-        note = emails.length ? `found on ${host}` : `none published on ${host}`
+        const r = await this.op(() =>
+          findSiteEmails(website, { signal: this.signal, chromeTab: () => this.chrome.page('check'), onChrome: () => this.status('running', `Opening ${host} in Chrome to look for emails`) })
+        )
+        found = r.emails
+        note = r.note
       } catch (e) {
         rethrowStop(e)
-        emails = []
+        found = []
         note = `could not read ${host}`
       }
-      this.emailSites.set(host, emails)
+      this.emailSites.set(host, found)
     }
+    const emails = found
     for (const e of emails) {
       const a = attachEmail(leadId, e, website)
       if (a?.isNew) this.newEmailIds.push(a.id)
     }
     if (emails.length) this.stats.emails++
-    db().run('UPDATE maps_results SET email_note = ? WHERE place_key = ?', note || (emails.length ? 'found' : 'none found'), key)
+    db().run('UPDATE maps_results SET email_note = ?, email_attempts = email_attempts + 1 WHERE place_key = ?', note || (emails.length ? 'found' : 'none found'), key)
     this.emitRow(key)
     if (emails.length) this.status('running', `Email found for ${name}: ${emails[0]}`)
   }
 
   private finishEmails() {
-    if (this.newEmailIds.length && getSettings().verification.autoVerify) {
-      try {
-        queueVerification(this.newEmailIds, { label: `Verify ${this.newEmailIds.length} emails from Google Maps` })
-      } catch {
-        /* verification not configured — emails stay unverified */
-      }
-      this.newEmailIds = []
-    }
+    // New emails are verified by the "Verify emails" switch on the Google Maps tab (see background.ts).
+    this.newEmailIds = []
     bus.publish('leads:changed', {})
   }
 
@@ -374,6 +364,7 @@ const RESULT_SELECT = `
     COALESCE(r.category, l.business_category) category, COALESCE(r.rating, l.rating) rating, COALESCE(r.reviews, l.review_count) reviews,
     l.business_name, l.phone, l.website, l.address,
     (SELECT ea.email FROM lead_emails le JOIN email_addresses ea ON ea.id = le.email_id WHERE le.lead_id = l.id ORDER BY le.is_primary DESC LIMIT 1) email,
+    (SELECT ea.verification_status FROM lead_emails le JOIN email_addresses ea ON ea.id = le.email_id WHERE le.lead_id = l.id ORDER BY le.is_primary DESC LIMIT 1) email_status,
     (SELECT group_concat(ea.email, '; ') FROM lead_emails le JOIN email_addresses ea ON ea.id = le.email_id WHERE le.lead_id = l.id) emails
   FROM maps_results r JOIN leads l ON l.id = r.lead_id`
 

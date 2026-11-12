@@ -28,10 +28,13 @@ vi.mock('../src/main/services/maps/maps', () => ({
     const l: any = LISTINGS[current]
     return { name: l.name, website: l.website, links: l.links ?? [], phoneTel: '', phoneText: l.phoneText, address: `${l.name} Road, Lahore, Pakistan`, category: l.category, rating: l.rating ?? null, reviews: l.reviews ?? null, infoLoaded: true, closed: !!l.closed, url: url(current) }
   },
-  readWebEvidence: async () => ({ blocked: false, knowledgePanelWebsite: '', resultUrls: [], hasResults: true })
+  readWebEvidence: async () => ({ blocked: false, knowledgePanelWebsite: '', resultUrls: [], hasResults: true }),
+  // Epsilon's site is built with JavaScript: the plain read finds nothing, Chrome finds the email.
+  readSiteInChrome: async (_p: any, site: string) => (site.includes('epsilon') ? [{ url: site, html: '<footer><p>Email</p><p>hello@epsilon.pk</p></footer>' }] : [])
 }))
 vi.mock('../src/main/services/sources/website', async (orig) => ({
   ...(await orig<any>()),
+  robotsFor: async () => ({ allow: [], disallow: [] }),
   crawlSite: async (site: string) => ({ emails: site.includes('alpha') ? [{ email: 'sales@alphashoes.pk', sourceUrl: site, kind: 'sales' }] : [], pages: [], phones: [], socials: [], blockedByRobots: [], errors: [] })
 }))
 
@@ -72,13 +75,14 @@ describe('Google Maps search loop (fake Maps)', () => {
     bus.on('event', (e: any) => e.type === 'maps:result' && events.push(e.payload.row))
     const s = runSearch('all')
     const stats = await s.run()
-    expect(stats).toMatchObject({ saved: 4, duplicates: 1, skipped: 1, emails: 1 })
+    expect(stats).toMatchObject({ saved: 4, duplicates: 1, skipped: 1, emails: 2 })
     const { rows, total } = listResults({}, { sort: 'name', dir: 'asc' })
     expect(total).toBe(4)
     expect(rows.map((r: any) => r.business_name)).toEqual(['Alpha Shoes', 'Beta Footwear', 'Epsilon Shoes', 'Gamma Kicks'])
     const alpha: any = rows[0]
     expect(alpha).toMatchObject({ category: 'Shoe store', phone: '+92 300 1111111', rating: 4.5, reviews: 120, email: 'sales@alphashoes.pk', website_status: 'has_website' })
     expect(rows.find((r: any) => r.business_name === 'Beta Footwear')!.website_status).toBe('social_only')
+    expect(rows.find((r: any) => r.business_name === 'Epsilon Shoes')!.email).toBe('hello@epsilon.pk') // via Chrome fallback
     expect(events.length).toBeGreaterThanOrEqual(4) // live rows were pushed while searching
     expect(db().get<any>('SELECT status, saved FROM maps_searches WHERE id = ?', s.id)).toMatchObject({ status: 'completed', saved: 4 })
     // Saved into the central Leads database too, as Google Maps leads.
@@ -119,8 +123,8 @@ describe('Google Maps search loop (fake Maps)', () => {
 
   it('filters, sorts and exports results', async () => {
     await runSearch('all').run()
-    expect(listResults({ email: 'with' }).total).toBe(1)
-    expect(listResults({ email: 'without' }).total).toBe(3)
+    expect(listResults({ email: 'with' }).total).toBe(2)
+    expect(listResults({ email: 'without' }).total).toBe(2)
     expect(listResults({ website: 'with' }).total).toBe(2)
     expect(listResults({ website: 'without' }).total).toBe(2)
     expect(listResults({ phone: 'without' }).rows.map((r: any) => r.business_name)).toEqual(['Gamma Kicks'])

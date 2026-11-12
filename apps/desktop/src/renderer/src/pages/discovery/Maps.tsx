@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Search, Square, MapPin, Tag, SlidersHorizontal, Download, Loader2, AlertTriangle, CheckCircle2, XCircle, Star, ExternalLink, X } from 'lucide-react'
 import { rpc, useAction, useEvent, useQuery } from '../../lib/rpc'
 import { fmtNum } from '../../lib/format'
-import { Button, Checkbox, DataTable, EmptyState, Input, Menu, Pager, Segmented, Select, type Column } from '../../components/ui'
+import { Button, Checkbox, DataTable, EmptyState, Input, Menu, Pager, Segmented, Select, Switch, type Column } from '../../components/ui'
 
 type BusinessType = 'all' | 'with' | 'without'
 type TriState = '' | 'with' | 'without'
@@ -19,9 +19,23 @@ const CATEGORIES = ['Restaurants', 'Cafes', 'Shoe stores', 'Clothing stores', 'G
 
 const STATUS: Record<string, [string, string]> = {
   has_website: ['green', 'Has website'],
-  possible_website: ['blue', 'Website found online'],
+  possible_website: ['blue', 'Site online'],
   no_website: ['amber', 'No website'],
-  social_only: ['violet', 'Social media only']
+  social_only: ['violet', 'Social only']
+}
+
+// Verification result → text colour only: exists (green), risky (yellow), does not exist (red).
+const EMAIL_COLOR: Record<string, string | undefined> = { safe: 'var(--green)', risky: 'var(--amber)', invalid: 'var(--red)' }
+const EMAIL_LABEL: Record<string, string> = { safe: 'mailbox exists', risky: 'risky (server accepts every address)', invalid: 'does not exist', unknown: 'could not be verified' }
+
+interface Bg {
+  autoFindEmails: boolean
+  verifyEmails: boolean
+  emailsPending: number
+  verifyPending: number
+  finding: boolean
+  verifying: boolean
+  port25Blocked: boolean
 }
 
 interface Live {
@@ -40,7 +54,21 @@ export function MapsPage() {
   const [location, setLocation] = useState('')
   const [category, setCategory] = useState('')
   const [type, setType] = useState<BusinessType>('all')
-  const [findEmails, setFindEmails] = useState(true)
+  const { data: bgInit } = useQuery<Bg>('maps:bgStatus', [])
+  const [bg, setBg] = useState<Bg | null>(null)
+  useEffect(() => {
+    if (bgInit) setBg(bgInit)
+  }, [bgInit])
+  useEvent('maps:bg', (p: Bg) => setBg(p))
+  const findEmails = bg?.autoFindEmails ?? true
+  const setFindEmails = (v: boolean) => {
+    setBg((b) => (b ? { ...b, autoFindEmails: v } : b))
+    void rpc('maps:setOptions', { autoFindEmails: v })
+  }
+  const setVerify = (v: boolean) => {
+    setBg((b) => (b ? { ...b, verifyEmails: v } : b))
+    void rpc('maps:setOptions', { verifyEmails: v })
+  }
   const [live, setLive] = useState<Live | null>(null)
   const [filters, setFilters] = useState<Filters>(NO_FILTERS)
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'id', dir: 'desc' })
@@ -85,38 +113,42 @@ export function MapsPage() {
     })
 
   const columns: Column<any>[] = [
-    { key: 'n', header: '#', width: 48, render: (r) => <span className="faint num">{(data?.rows.indexOf(r) ?? 0) + offset + 1}</span> },
+    { key: 'n', header: '#', width: 38, render: (r) => <span className="faint num">{(data?.rows.indexOf(r) ?? 0) + offset + 1}</span> },
     {
-      key: 'name', header: 'Business Name', sortable: true,
+      key: 'name', header: 'Business Name', sortable: true, width: '16%',
       render: (r) => (
-        <div className="row gap-4" style={{ minWidth: 180 }}>
-          <span className="primary-cell truncate" style={{ maxWidth: 240 }} title={r.business_name}>{r.business_name}</span>
+        <div className="row gap-4" style={{ minWidth: 0 }}>
+          <span className="primary-cell truncate" title={r.business_name}>{r.business_name}</span>
           {r.maps_url && <a title="Open in Google Maps" onClick={(e) => { e.stopPropagation(); void rpc('app:openExternal', r.maps_url) }} style={{ cursor: 'pointer', display: 'inline-flex' }}><ExternalLink size={12} /></a>}
         </div>
       )
     },
-    { key: 'category', header: 'Category', sortable: true, render: (r) => <span className="muted truncate" style={{ display: 'block', maxWidth: 150 }}>{r.category || '—'}</span> },
-    { key: 'phone', header: 'Phone', sortable: true, render: (r) => (r.phone ? <span className="num" style={{ whiteSpace: 'nowrap' }}>{r.phone}</span> : <span className="faint">—</span>) },
+    { key: 'category', header: 'Category', sortable: true, width: '9%', render: (r) => <span className="muted truncate" style={{ display: 'block' }} title={r.category}>{r.category || '—'}</span> },
+    { key: 'phone', header: 'Phone', sortable: true, width: '13%', render: (r) => (r.phone ? <span className="num" style={{ whiteSpace: 'nowrap' }}>{r.phone}</span> : <span className="faint">—</span>) },
     {
-      key: 'email', header: 'Email', sortable: true,
-      render: (r) => r.email ? <span className="truncate" style={{ display: 'block', maxWidth: 200 }} title={r.emails}>{r.email}</span> : <span className="faint" title={r.email_note ?? ''}>{r.email_note && /could not/.test(r.email_note) ? 'Not readable' : '—'}</span>
+      key: 'email', header: 'Email', sortable: true, width: '14%',
+      render: (r) =>
+        r.email ? <span className="truncate" style={{ display: 'block', color: EMAIL_COLOR[r.email_status] }} title={`${r.emails}${EMAIL_LABEL[r.email_status] ? ` — ${EMAIL_LABEL[r.email_status]}` : ''}`}>{r.email}</span>
+        : r.website_status !== 'has_website' ? <span className="faint" title="Emails are found on business websites; this business has none on Google Maps.">No website</span>
+        : !r.email_note ? <span className="faint">—</span>
+        : <span className="faint" title={r.email_note}>{/could not|does not allow/.test(r.email_note) ? 'Site blocks reading' : 'Not published'}</span>
     },
     {
-      key: 'website', header: 'Website', sortable: true,
+      key: 'website', header: 'Website', sortable: true, width: '9%',
       render: (r) => r.website ? (
-        <a onClick={(e) => { e.stopPropagation(); void rpc('app:openExternal', r.website) }} className="truncate" style={{ display: 'block', maxWidth: 170, cursor: 'pointer' }} title={r.website}>{r.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}</a>
+        <a onClick={(e) => { e.stopPropagation(); void rpc('app:openExternal', r.website) }} className="truncate" style={{ display: 'block', cursor: 'pointer' }} title={r.website}>{r.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}</a>
       ) : <span className="faint">—</span>
     },
-    { key: 'address', header: 'Address', sortable: true, render: (r) => <span className="muted truncate" style={{ display: 'block', maxWidth: 240 }} title={r.address}>{r.address || '—'}</span> },
+    { key: 'address', header: 'Address', sortable: true, width: '14%', render: (r) => <span className="muted truncate" style={{ display: 'block' }} title={r.address}>{r.address || '—'}</span> },
     {
-      key: 'rating', header: 'Rating', sortable: true, align: 'right',
-      render: (r) => r.rating ? <span className="row gap-4 num" style={{ justifyContent: 'flex-end', whiteSpace: 'nowrap' }}><Star size={12} fill="var(--amber)" color="var(--amber)" />{Number(r.rating).toFixed(1)}{r.reviews ? <span className="faint">({fmtNum(r.reviews)})</span> : null}</span> : <span className="faint">—</span>
+      key: 'rating', header: 'Rating', sortable: true, width: '6%',
+      render: (r) => r.rating ? <span className="row gap-4 num" style={{ whiteSpace: 'nowrap' }} title={r.reviews ? `${fmtNum(r.reviews)} reviews` : undefined}><Star size={12} fill="var(--amber)" color="var(--amber)" />{Number(r.rating).toFixed(1)}</span> : <span className="faint">—</span>
     },
-    { key: 'status', header: 'Status', sortable: true, render: (r) => { const [c, l] = STATUS[r.website_status] ?? ['', r.website_status]; return <span className={`pill ${c}`}><span className="d" />{l}</span> } }
+    { key: 'status', header: 'Status', sortable: true, width: '10%', render: (r) => { const [c, l] = STATUS[r.website_status] ?? ['', r.website_status]; return <span className={`pill ${c}`} style={{ padding: '0 7px', fontSize: 11 }} title={l}>{l}</span> } }
   ]
 
   return (
-    <div className="page">
+    <div className="page fill">
       <div className="page-inner">
         <div className="ph" style={{ marginBottom: 14 }}>
           <div>
@@ -155,9 +187,10 @@ export function MapsPage() {
             )}
           </div>
           <div className="row mt-8" style={{ minHeight: 26 }}>
-            <Checkbox checked={findEmails} onChange={(v) => !running && setFindEmails(v)} label={<span style={{ fontSize: 12.5 }}>Find emails from business websites</span>} />
+            <Checkbox checked={findEmails} onChange={(v) => setFindEmails(v)} label={<span style={{ fontSize: 12.5 }}>Find emails from business websites</span>} />
+            <span className="faint truncate" style={{ fontSize: 12 }} title="Choose “With Website” to get mostly businesses with emails.">· only businesses with a website can have an email</span>
             <div className="grow" />
-            <span className="faint" style={{ fontSize: 12 }}>A Chrome window opens to run the search. Keep it open while searching.</span>
+            <span className="faint" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>Chrome opens for the search — keep it open</span>
           </div>
           {live && <Progress live={live} />}
         </form>
@@ -167,6 +200,11 @@ export function MapsPage() {
           <b style={{ fontSize: 14 }}>{fmtNum(data?.total ?? 0)} businesses</b>
           {selected.size > 0 && <span className="faint" style={{ fontSize: 12.5 }}>· {selected.size} selected <a style={{ cursor: 'pointer' }} onClick={() => setSelected(new Set())}>clear</a></span>}
           <div className="grow" />
+          <BackgroundNote bg={bg} />
+          <label className="row" style={{ gap: 8, fontSize: 13, cursor: 'pointer', marginRight: 6 }} title="Checks each email with its mail server: green = exists, yellow = risky, red = does not exist">
+            <Switch on={!!bg?.verifyEmails} onChange={setVerify} />
+            Verify emails
+          </label>
           <FiltersButton value={filters} onChange={setFilters} categories={foundCategories ?? []} count={activeFilters} />
           <Menu
             align="right"
@@ -184,8 +222,9 @@ export function MapsPage() {
         </div>
 
         {/* ---------------- results table ---------------- */}
-        <div className="card" style={{ overflow: 'hidden' }}>
+        <div className="card scroll-card">
           <DataTable
+            fixed
             loading={loading}
             rows={data?.rows}
             columns={columns}
@@ -206,7 +245,7 @@ export function MapsPage() {
             }
           />
           {(data?.total ?? 0) > 0 && (
-            <div className="row" style={{ borderTop: '1px solid var(--border)' }}>
+            <div className="row" style={{ borderTop: '1px solid var(--border)', flexShrink: 0 }}>
               <div className="grow"><Pager total={data!.total} offset={offset} limit={pageSize} onChange={setOffset} /></div>
               <div className="row" style={{ padding: '0 14px', fontSize: 12.5 }}>
                 <span className="faint">Rows</span>
@@ -217,6 +256,21 @@ export function MapsPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+function BackgroundNote({ bg }: { bg: Bg | null }) {
+  if (!bg) return null
+  const parts: string[] = []
+  if (bg.autoFindEmails && bg.emailsPending) parts.push(`Finding emails on ${fmtNum(bg.emailsPending)} website${bg.emailsPending === 1 ? '' : 's'}`)
+  if (bg.verifyEmails && bg.verifyPending) parts.push(`Verifying ${fmtNum(bg.verifyPending)} email${bg.verifyPending === 1 ? '' : 's'}`)
+  if (bg.verifyEmails && bg.port25Blocked) parts.push('mail servers unreachable from this network (port 25)')
+  if (!parts.length) return null
+  return (
+    <span className="faint row gap-4" style={{ fontSize: 12, marginRight: 8 }}>
+      {(bg.finding || bg.verifying) && <Loader2 size={12} style={{ animation: 'spin .8s linear infinite' }} />}
+      {parts.join(' · ')}
+    </span>
   )
 }
 

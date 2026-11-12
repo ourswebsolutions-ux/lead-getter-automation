@@ -2109,3 +2109,55 @@ table.tbl {
   height: 40px;
   flex-shrink: 0;
 }
+
+/* ------------------------------------------------------------------ fixed-layout tables & full-height pages */
+.tbl.fixed {
+  table-layout: fixed;
+}
+.tbl.fixed td,
+.tbl.fixed th {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: none;
+}
+.tbl.fixed td > * {
+  max-width: 100%;
+}
+.page.fill {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 18px 20px 14px;
+}
+.page.fill > .page-inner {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: none;
+}
+.scroll-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.scroll-card > .table-wrap,
+.scroll-card > .empty {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.tbl.fixed td,
+.tbl.fixed th {
+  padding: 0 9px;
+}
+.tbl.fixed .pill {
+  max-width: 100%;
+  overflow: hidden;
+}

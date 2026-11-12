@@ -97,3 +97,38 @@ export async function runMapsCapture(dir: string): Promise<void> {
   await shot('maps-stopped')
   app.quit()
 }
+
+/** Dev-only: fills a throwaway profile with sample Maps rows and screenshots the table layout. */
+export async function runMapsLayoutCapture(dir: string): Promise<void> {
+  mkdirSync(dir, { recursive: true })
+  const { upsertLead, attachEmail } = await import('./services/leads')
+  for (let i = 1; i <= 80; i++) {
+    const has = i % 3 !== 0
+    const r = upsertLead({
+      business_name: `${['Royal', 'Golden', 'Prime', 'City', 'Classic'][i % 5]} ${['Bakers & Confectioners', 'Shoes Gallery', 'Garments House', 'Restaurant & BBQ Grill'][i % 4]} ${i}`,
+      business_category: ['Bakery', 'Shoe store', 'Clothing store', 'Restaurant'][i % 4],
+      phone: `+92 300 ${String(1000000 + i * 7919).slice(0, 7)}`,
+      website: has ? `https://www.example-business-${i}.pk` : null,
+      address: `Shop No ${i}, Block ${String.fromCharCode(65 + (i % 8))}, Main Boulevard Gulberg III, Lahore, Punjab 54000, Pakistan`,
+      source: 'google_maps', source_ref: `dev${i}`, rating: 3.5 + (i % 15) / 10, review_count: i * 37
+    })
+    if (has && i % 2) {
+      const e = attachEmail(r.id, `info@example-business-${i}.pk`, null)
+      if (e) db().run('UPDATE email_addresses SET verification_status = ? WHERE id = ?', ['safe', 'risky', 'invalid', 'unverified'][i % 4], e.id)
+    }
+    db().run(`INSERT OR IGNORE INTO maps_results (lead_id, place_key, maps_url, category, rating, reviews, website_status) VALUES (?, ?, 'https://www.google.com/maps/place/x', ?, ?, ?, ?)`,
+      r.id, `dev${i}`, ['Bakery', 'Shoe store', 'Clothing store', 'Restaurant'][i % 4], 3.5 + (i % 15) / 10, i * 37, has ? 'has_website' : i % 2 ? 'no_website' : 'social_only')
+  }
+  const { updateSettings } = await import('./core/settings')
+  updateSettings({ maps: { autoFindEmails: false, verifyEmails: true } })
+  const win = BrowserWindow.getAllWindows()[0]
+  win.setSize(1366, 768)
+  await new Promise((r) => setTimeout(r, 2500))
+  await win.webContents.executeJavaScript(`localStorage.setItem('lge.page', '"maps"'); location.reload(); true`)
+  await new Promise((r) => setTimeout(r, 3500))
+  await win.webContents.insertCSS('*,*::before,*::after{animation:none!important;transition:none!important}')
+  writeFileSync(join(dir, 'maps-layout.png'), (await win.webContents.capturePage()).toPNG())
+  const m = await win.webContents.executeJavaScript(`(() => { const w = document.querySelector('.scroll-card .table-wrap'); const p = document.querySelector('.page.fill'); return { pageScroll: p.scrollHeight > p.clientHeight, tableScrollsY: w.scrollHeight > w.clientHeight, tableScrollsX: w.scrollWidth > w.clientWidth } })()`)
+  writeFileSync(join(dir, 'maps-layout.json'), JSON.stringify(m))
+  app.quit()
+}

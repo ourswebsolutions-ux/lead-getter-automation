@@ -55,7 +55,7 @@ export function isAllowed(rules: RobotsRules, path: string): boolean {
 }
 
 const robotsCache = new Map<string, Promise<RobotsRules>>()
-async function robotsFor(origin: string): Promise<RobotsRules> {
+export async function robotsFor(origin: string): Promise<RobotsRules> {
   let p = robotsCache.get(origin)
   if (!p) {
     p = (async () => {
@@ -77,7 +77,29 @@ async function robotsFor(origin: string): Promise<RobotsRules> {
 
 const EMAIL_IN_TEXT = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,24}/gi
 const OBFUSCATED = /([A-Z0-9._%+-]+)\s*(?:\[at\]|\(at\)|\{at\}|\s+at\s+)\s*([A-Z0-9-]+(?:\s*(?:\[dot\]|\(dot\)|\s+dot\s+|\.)\s*[A-Z0-9-]+)+)/gi
-const BAD_EMAIL = /\.(png|jpe?g|gif|svg|webp|css|js|ico)$|^(example|test|your|name|email|user)@|@(example|domain|email|sentry|wixpress|sentry-next)\.|@[0-9]+x\./i
+const BAD_EMAIL = /\.(png|jpe?g|gif|svg|webp|css|js|ico|check|local|test|invalid|example|html?|php)$|^(example|test|your|name|email|user|noreply|no-reply|donotreply|do-not-reply)@|@(example|domain|email|sentry|wixpress|sentry-next|godaddy|checkout)\.|@[a-z0-9.-]*sentry[a-z0-9.-]*\.|@[0-9]+x\./i
+
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+}
+
+/**
+ * Visible text of a page with block elements turned into line breaks and tags into spaces, so separate
+ * items are never glued together (e.g. "Email" + "info@x.com" + "Call" must not become "emailinfo@x.comcall").
+ */
+export function textOf(html: string): string {
+  return decodeEntities(
+    String(html)
+      .replace(/<(script|style|noscript|svg|template)\b[\s\S]*?<\/\1>/gi, ' ')
+      .replace(/<(br|\/p|\/div|\/li|\/tr|\/h\d|\/td|\/section|\/footer|\/header|\/address|\/span|\/a|\/strong|\/b)\b[^>]*>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ')
+  )
+    .replace(/[ \t\u00a0]+/g, ' ')
+    .replace(/\n\s*/g, '\n')
+}
 const PHONE_RE = /(?:\+|00)?\d[\d\s().-]{7,18}\d/g
 
 /** Decodes Cloudflare's email-protection obfuscation (data-cfemail hex). */
@@ -102,9 +124,10 @@ export function extractEmails(html: string, text?: string): string[] {
   $('a[href^="mailto:"]').each((_, el) => add(decodeURIComponent(($(el).attr('href') ?? '').slice(7).split('?')[0])))
   $('[data-cfemail]').each((_, el) => add(decodeCfEmail($(el).attr('data-cfemail') ?? '')))
   $('a[href*="/cdn-cgi/l/email-protection#"]').each((_, el) => add(decodeCfEmail(($(el).attr('href') ?? '').split('#')[1] ?? '')))
-  const body = text ?? $('body').text()
+  const body = text ?? textOf(html)
   for (const m of body.match(EMAIL_IN_TEXT) ?? []) add(m)
-  for (const m of html.match(EMAIL_IN_TEXT) ?? []) add(m)
+  // The business's own structured data for search engines (\"email\": \"...\" in JSON-LD).
+  for (const m of html.matchAll(/"email"\s*:\s*"(?:mailto:)?([^"\s]+@[^"\s]+)"/gi)) add(m[1])
   for (const m of body.matchAll(OBFUSCATED)) add(`${m[1]}@${m[2].replace(/\s*(\[dot\]|\(dot\)|\s+dot\s+)\s*/gi, '.').replace(/\s+/g, '')}`)
   return [...found]
 }
@@ -184,7 +207,12 @@ export async function crawlSite(start: string, opts: CrawlOptions = {}): Promise
 
   const result: CrawlResult = { startUrl: startUrl.href, pages: [], emails: [], phones: [], socials: [], blockedByRobots: [], errors: [] }
   const seen = new Set<string>()
-  const queue: { url: string; score: number }[] = [{ url: startUrl.href, score: 100 }]
+  // The usual contact/about addresses are tried too, even when the home page doesn't link them
+  // (as in the original Lead Finder). Nothing is guessed about the emails themselves.
+  const queue: { url: string; score: number }[] = [
+    { url: startUrl.href, score: 100 },
+    ...['/contact', '/contact-us', '/about', '/about-us'].map((p, i) => ({ url: new URL(p, startUrl.origin).href, score: 30 - i }))
+  ]
   const emailSeen = new Set<string>()
   const phoneSeen = new Set<string>()
   const socialSeen = new Set<string>()
@@ -220,9 +248,8 @@ export async function crawlSite(start: string, opts: CrawlOptions = {}): Promise
       } else if (finalHost !== host) continue
       const html = (await res.text()).slice(0, 2_000_000)
       const $ = cheerio.load(html)
-      $('script,style,noscript,svg').remove()
-      const text = $('body').text().replace(/\s+/g, ' ').trim()
-      const emails = extractEmails(html, text)
+      const text = textOf(html).replace(/\s+/g, ' ').trim()
+      const emails = extractEmails(html)
       const phones = extractPhones(html)
       result.pages.push({ url, title: $('title').first().text().trim().slice(0, 200), text: text.slice(0, 20000), emails, phones })
       for (const e of emails)

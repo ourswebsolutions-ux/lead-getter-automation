@@ -22,12 +22,12 @@ describe('live Google Maps search in Chrome', () => {
       }
     })
     const search = new MapsSearch(
-      { keyword: 'shoe store', location: 'Lahore', category: '', businessType: 'all', findEmails: true },
+      { keyword: process.env.LGE_Q ?? 'shoe store', location: 'Lahore', category: '', businessType: (process.env.LGE_TYPE as any) ?? 'all', findEmails: true },
       chrome,
       ctl.signal,
       { ...PACING, listing: [600, 1000], scroll: [800, 1200] }
     )
-    const watcher = setInterval(() => search.stats.saved >= 5 && ctl.abort(), 500)
+    const watcher = setInterval(() => (search.stats.saved >= Number(process.env.LGE_N ?? 5) || Date.now() - t0 > 240_000) && ctl.abort(), 500)
     const stats = await search.run()
     clearInterval(watcher)
     await chrome.dispose(true)

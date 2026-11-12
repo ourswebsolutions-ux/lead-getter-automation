@@ -47,6 +47,7 @@ export interface AppSettings {
   crawler: { maxPagesPerSite: number; respectRobots: boolean; concurrency: number; delayMs: number }
   compliance: { emailFooter: string; optOutKeywords: string; whatsappOptOutNotice: string }
   notifications: { desktop: boolean }
+  maps: { autoFindEmails: boolean; verifyEmails: boolean }
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -72,7 +73,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
     optOutKeywords: 'stop, unsubscribe, remove me, opt out, not interested',
     whatsappOptOutNotice: 'Reply STOP if you would rather not receive messages from us.'
   },
-  notifications: { desktop: true }
+  notifications: { desktop: true },
+  maps: { autoFindEmails: true, verifyEmails: false }
 }
 
 /** Keys stored in the encrypted vault, never in settings. */

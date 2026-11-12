@@ -489,7 +489,7 @@ export interface Column<T> {
   align?: 'left' | 'right' | 'center'
 }
 export function DataTable<T extends { id: number | string }>({
-  columns, rows, loading, selectable, selected, onSelect, onRowClick, sort, onSort, empty, compact, rowClass
+  columns, rows, loading, selectable, selected, onSelect, onRowClick, sort, onSort, empty, compact, rowClass, fixed
 }: {
   columns: Column<T>[]
   rows: T[] | undefined
@@ -503,6 +503,8 @@ export function DataTable<T extends { id: number | string }>({
   empty?: ReactNode
   compact?: boolean
   rowClass?: (row: T) => string
+  /** Fixed layout: columns keep their widths and long text is cut with “…”, so the table never scrolls sideways. */
+  fixed?: boolean
 }) {
   if (loading && !rows) return <SkeletonRows cols={Math.min(columns.length, 6)} />
   if (!rows?.length) return <>{empty ?? <EmptyState title="Nothing here yet" />}</>
@@ -515,7 +517,7 @@ export function DataTable<T extends { id: number | string }>({
   }
   return (
     <div className="table-wrap">
-      <table className={`tbl ${compact ? 'compact' : ''}`}>
+      <table className={`tbl ${compact ? 'compact' : ''} ${fixed ? 'fixed' : ''}`}>
         <thead>
           <tr>
             {selectable && (

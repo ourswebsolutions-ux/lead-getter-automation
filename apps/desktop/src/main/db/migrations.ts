@@ -502,6 +502,10 @@ CREATE TABLE maps_results (
 CREATE INDEX ix_maps_results_search ON maps_results(search_id);
 CREATE INDEX ix_maps_results_lead ON maps_results(lead_id);
 `
+  },
+  {
+    version: 4,
+    name: 'background email finder attempts',
+    sql: `ALTER TABLE maps_results ADD COLUMN email_attempts INTEGER NOT NULL DEFAULT 0;`
   }
 ]
-

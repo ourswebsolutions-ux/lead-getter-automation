@@ -5,6 +5,9 @@ import { ChromeSession } from './chrome'
 import { MapsSearch, type SearchInput } from './session'
 
 export * from './session'
+export { backgroundStatus } from './background'
+import { startMapsBackground, stopMapsBackground, onSettingsChanged } from './background'
+import { updateSettings, getSettings } from '../../core/settings'
 
 /** One Google Maps search at a time, in one shared Chrome window. */
 let chrome: ChromeSession | null = null
@@ -42,11 +45,21 @@ export function activeSearch() {
 }
 
 /** On startup, searches left 'running' by a crash or quit are marked stopped. */
+export function startBackground() {
+  startMapsBackground({ activeSearchId: () => current?.search.id ?? null, chrome: () => chrome })
+}
+
+export function setMapsOptions(patch: { autoFindEmails?: boolean; verifyEmails?: boolean }) {
+  updateSettings({ maps: { ...getSettings().maps, ...patch } })
+  onSettingsChanged()
+}
+
 export function recoverSearches() {
   db().run("UPDATE maps_searches SET status = 'stopped', message = 'Interrupted when the app closed', finished_at = datetime('now') WHERE status IN ('running','paused')")
 }
 
 export async function shutdownMaps() {
+  stopMapsBackground()
   current?.ctl.abort()
   await chrome?.dispose(false)
 }

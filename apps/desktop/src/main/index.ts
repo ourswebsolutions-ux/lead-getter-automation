@@ -16,7 +16,7 @@ import { registerWhatsApp, restoreSessions, shutdownWhatsApp } from './services/
 import { registerEmail, startInboxPolling, stopInboxPolling } from './services/email'
 import { startCampaignEngine, stopCampaignEngine } from './services/campaigns'
 import { initSubscription } from './services/subscription'
-import { recoverSearches, shutdownMaps } from './services/maps'
+import { recoverSearches, shutdownMaps, startBackground as startMapsBackground } from './services/maps'
 
 // Separate identity from any other "Lead Getter" install: own userData dir, own DB, own sessions.
 app.setName('Lead Getter Enterprise')
@@ -173,12 +173,14 @@ app.whenReady().then(async () => {
   startInboxPolling()
   initSubscription()
   recoverSearches()
+  startMapsBackground()
   void restoreSessions()
   void setupUpdates()
 
   if (!app.isPackaged && process.env.LGE_CAPTURE_DIR) {
     const dev = await import('./devCapture')
-    if (process.env.LGE_CAPTURE_MAPS) void dev.runMapsCapture(process.env.LGE_CAPTURE_DIR)
+    if (process.env.LGE_CAPTURE_MAPS === 'layout') void dev.runMapsLayoutCapture(process.env.LGE_CAPTURE_DIR)
+    else if (process.env.LGE_CAPTURE_MAPS) void dev.runMapsCapture(process.env.LGE_CAPTURE_DIR)
     else {
       dev.seedSampleData()
       void dev.runCapture(process.env.LGE_CAPTURE_DIR)
