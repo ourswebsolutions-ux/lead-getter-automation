@@ -267,6 +267,10 @@ const handlers: Record<string, Handler> = {
   'smtp:test': (id: number) => email.testSmtp(id),
   'smtp:sendTest': (id: number, to: string, subject: string, body: string, isHtml: boolean) => email.sendTestEmail(id, to, subject, body, isHtml),
   'smtp:poll': (id: number) => email.pollInbox(id),
+  'smtp:accountCategories': () => email.accountCategories(),
+  'smtp:setCategories': (id: number, categoryIds: number[]) => email.setAccountCategories(id, categoryIds),
+  'email:activity': (opts) => email.emailActivity(opts),
+  'email:stats': () => email.emailStats(),
 
   // ------------------------------------------------------------ campaigns
   'campaigns:list': (channel) => campaigns.listCampaigns(channel),

@@ -507,5 +507,17 @@ CREATE INDEX ix_maps_results_lead ON maps_results(lead_id);
     version: 4,
     name: 'background email finder attempts',
     sql: `ALTER TABLE maps_results ADD COLUMN email_attempts INTEGER NOT NULL DEFAULT 0;`
+  },
+  {
+    version: 5,
+    name: 'email accounts per category',
+    sql: `
+CREATE TABLE smtp_account_categories (
+  account_id INTEGER NOT NULL REFERENCES smtp_accounts(id) ON DELETE CASCADE,
+  category_id INTEGER NOT NULL REFERENCES lead_categories(id) ON DELETE CASCADE,
+  PRIMARY KEY (account_id, category_id)
+);
+CREATE INDEX ix_smtp_cat_category ON smtp_account_categories(category_id);
+`
   }
 ]

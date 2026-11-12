@@ -334,3 +334,82 @@ export function registerEmail(): void {
     return { externalId: id }
   })
 }
+
+
+// ---------------------------------------------------------------- accounts per category
+
+/** Categories each account sends to: { accountId: categoryId[] }. */
+export function accountCategories(): Record<number, number[]> {
+  const out: Record<number, number[]> = {}
+  for (const r of db().all<{ account_id: number; category_id: number }>('SELECT account_id, category_id FROM smtp_account_categories'))
+    (out[r.account_id] ??= []).push(r.category_id)
+  return out
+}
+
+export function setAccountCategories(accountId: number, categoryIds: number[]): void {
+  db().tx(() => {
+    db().run('DELETE FROM smtp_account_categories WHERE account_id = ?', accountId)
+    for (const c of [...new Set(categoryIds)]) db().run('INSERT OR IGNORE INTO smtp_account_categories (account_id, category_id) VALUES (?, ?)', accountId, c)
+  })
+}
+
+/** Accounts assigned to a lead's category that can send now (enabled, healthy, under the daily limit). */
+export function accountsForCategory(categoryId: number | null): number[] {
+  if (!categoryId) return []
+  return db()
+    .all<{ id: number; daily_limit: number }>(
+      `SELECT a.id, a.daily_limit FROM smtp_account_categories ac JOIN smtp_accounts a ON a.id = ac.account_id
+       WHERE ac.category_id = ? AND a.enabled = 1 AND a.status != 'error' ORDER BY a.id`,
+      categoryId
+    )
+    .filter((a) => sentToday(a.id) < a.daily_limit)
+    .map((a) => a.id)
+}
+
+// ---------------------------------------------------------------- sent emails & status
+
+const ACTIVITY = `
+  FROM messages m
+  JOIN conversations c ON c.id = m.conversation_id AND c.channel = 'email'
+  LEFT JOIN leads l ON l.id = c.lead_id
+  LEFT JOIN smtp_accounts a ON a.id = c.account_id
+  WHERE m.direction = 'out' AND m.author != 'system'`
+
+const REPLIED = `EXISTS (SELECT 1 FROM messages x WHERE x.conversation_id = m.conversation_id AND x.direction = 'in' AND x.id > m.id)`
+
+export function emailActivity(opts: { status?: 'sent' | 'replied' | 'failed'; search?: string; limit?: number; offset?: number } = {}) {
+  const w: string[] = []
+  const p: any[] = []
+  if (opts.status === 'failed') w.push("m.status = 'failed'")
+  if (opts.status === 'replied') w.push(`m.status != 'failed' AND ${REPLIED}`)
+  if (opts.status === 'sent') w.push(`m.status != 'failed' AND NOT ${REPLIED}`)
+  if (opts.search?.trim()) {
+    w.push('(c.address LIKE ? OR l.business_name LIKE ? OR m.subject LIKE ?)')
+    const q = `%${opts.search.trim()}%`
+    p.push(q, q, q)
+  }
+  const where = w.length ? ` AND ${w.join(' AND ')}` : ''
+  const total = db().get<{ n: number }>(`SELECT COUNT(*) n ${ACTIVITY}${where}`, ...p)!.n
+  const rows = db().all(
+    `SELECT m.id, m.created_at, m.subject, substr(m.body, 1, 160) preview, m.status, m.error, m.author, c.id conversation_id, c.address to_email,
+       l.business_name, a.from_email from_email,
+       CASE WHEN m.status = 'failed' THEN 'failed' WHEN ${REPLIED} THEN 'replied' ELSE 'sent' END state
+     ${ACTIVITY}${where} ORDER BY m.id DESC LIMIT ? OFFSET ?`,
+    ...p,
+    opts.limit ?? 50,
+    opts.offset ?? 0
+  )
+  return { rows, total }
+}
+
+export function emailStats() {
+  const one = (sql: string) => db().get<{ n: number }>(sql)!.n
+  return {
+    sent: one(`SELECT COUNT(*) n ${ACTIVITY} AND m.status != 'failed'`),
+    replied: one(`SELECT COUNT(DISTINCT m.conversation_id) n ${ACTIVITY} AND m.status != 'failed' AND ${REPLIED}`),
+    failed: one(`SELECT COUNT(*) n ${ACTIVITY} AND m.status = 'failed'`),
+    sending: one(`SELECT COUNT(*) n FROM campaign_recipients r JOIN campaigns cp ON cp.id = r.campaign_id
+      WHERE cp.channel = 'email' AND cp.status IN ('running','scheduled') AND (r.status IN ('queued','sending') OR (r.status = 'sent' AND r.next_send_at IS NOT NULL))`),
+    today: one(`SELECT COUNT(*) n ${ACTIVITY} AND m.status != 'failed' AND m.created_at >= date('now')`)
+  }
+}

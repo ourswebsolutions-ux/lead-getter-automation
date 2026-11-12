@@ -48,6 +48,7 @@ export interface AppSettings {
   compliance: { emailFooter: string; optOutKeywords: string; whatsappOptOutNotice: string }
   notifications: { desktop: boolean }
   maps: { autoFindEmails: boolean; verifyEmails: boolean }
+  email: { rotateAccounts: boolean }
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -74,7 +75,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
     whatsappOptOutNotice: 'Reply STOP if you would rather not receive messages from us.'
   },
   notifications: { desktop: true },
-  maps: { autoFindEmails: true, verifyEmails: false }
+  maps: { autoFindEmails: true, verifyEmails: false },
+  email: { rotateAccounts: true }
 }
 
 /** Keys stored in the encrypted vault, never in settings. */

@@ -48,6 +48,14 @@ export function seedSampleData(): void {
     JSON.stringify(['Payment gateway fees billed separately', 'Client provides menu content and photos']),
     'Thanks! For a full restaurant website with online ordering, the investment would typically be $2,700 – $6,800 depending on payment integration and menu size. Would you like me to prepare a detailed proposal?'
   )
+  db().run("INSERT INTO smtp_accounts (name, host, port, username, from_name, from_email, status) VALUES ('sales@automas.example', 'smtp.gmail.com', 465, 'u', 'Ali', 'sales@automas.example', 'ok'), ('ali@automas.example', 'smtp.gmail.com', 465, 'u', 'Ali', 'ali@automas.example', 'ok')")
+  const cat = db().get<{ id: number }>('SELECT id FROM lead_categories ORDER BY id LIMIT 1')
+  if (cat) db().run('INSERT INTO smtp_account_categories (account_id, category_id) SELECT id, ? FROM smtp_accounts', cat.id)
+  db().all<{ id: number; email: string; business_name: string }>("SELECT l.id, e.email, l.business_name FROM leads l JOIN lead_emails le ON le.lead_id = l.id JOIN email_addresses e ON e.id = le.email_id LIMIT 9").forEach((l, i) => {
+    const c = getOrCreateConversation({ channel: 'email', address: l.email, accountId: 1 + (i % 2), leadId: l.id })
+    recordMessage(c.id, { direction: 'out', author: 'campaign', subject: `Quick idea for ${l.business_name}`, body: `Hi, I came across ${l.business_name} and had a quick idea for your website…`, status: i === 4 ? 'failed' : 'sent' })
+    if (i % 3 === 0) recordMessage(c.id, { direction: 'in', author: 'contact', body: 'Thanks, tell me more.' })
+  })
   const cid = createCampaign('whatsapp', 'Dubai restaurants — November', { accountIds: [] }, [{ kind: 'variant', body: 'Hi {contact_name}, I came across {business_name} in {city}…' }])
   addRecipients(cid, { filter: { cities: ['Dubai'] } })
 }

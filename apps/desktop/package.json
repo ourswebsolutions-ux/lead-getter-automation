@@ -10,7 +10,7 @@
   "license": "UNLICENSED",
   "private": true,
   "scripts": {
-    "dev": "node scripts/electron-vite.mjs dev",
+    "dev": "node scripts/electron-vite.mjs dev --watch",
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",

@@ -1,4 +1,5 @@
 import { db } from '../db'
+import { getSettings } from '../core/settings'
 import { bus } from '../core/events'
 import { logger } from '../core/logger'
 import { logActivity } from '../core/activity'
@@ -277,7 +278,12 @@ function sentTodayCampaign(id: number): number {
   return db().get<{ n: number }>("SELECT COUNT(*) n FROM campaign_executions WHERE campaign_id = ? AND event = 'sent' AND created_at >= date('now')", id)!.n
 }
 
-function pickAccount(channel: Channel, cfg: CampaignConfig, rotate: number): number | null {
+function pickAccount(channel: Channel, cfg: CampaignConfig, rotate: number, categoryId: number | null = null): number | null {
+  if (channel === 'email') {
+    // Accounts assigned to the lead's category take priority; with "Rotate accounts" on they are shuffled.
+    const forCategory = email.accountsForCategory(categoryId)
+    if (forCategory.length) return getSettings().email.rotateAccounts ? forCategory[Math.floor(Math.random() * forCategory.length)] : forCategory[0]
+  }
   const ids = cfg.accountIds ?? []
   for (let i = 0; i < ids.length; i++) {
     const id = ids[(rotate + i) % ids.length]
@@ -351,7 +357,7 @@ async function processCampaign(c: any): Promise<void> {
     if (policy === 'safe_risky' && !['safe', 'risky'].includes(st ?? '')) return skipRecipient(`Email not verified (${st ?? 'unverified'})`)
   }
 
-  const accountId = pickAccount(c.channel, cfg, r.id)
+  const accountId = pickAccount(c.channel, cfg, r.id, lead.category_id ?? null)
   if (!accountId) {
     nextAt.set(c.id, Date.now() + 5 * 60_000) // all accounts busy/offline/at limit — re-check later
     return

@@ -53,7 +53,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         short: 'Send',
         items: [
           { id: 'wa-campaigns', label: 'WhatsApp Campaigns', icon: ic(Send) },
-          { id: 'email-accounts', label: 'Email Accounts', icon: ic(AtSign) },
+          { id: 'email-accounts', label: 'Email', icon: ic(AtSign) },
           { id: 'email-campaigns', label: 'Email Campaigns', icon: ic(Mails) }
         ]
       },
