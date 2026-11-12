@@ -12,7 +12,7 @@ const STATE: Record<string, [string, string]> = { sent: ['blue', 'Sent'], replie
 
 /** Email: sending accounts on the left (add, categories, rotation), sent emails with their status on the right. */
 export function EmailAccountsPage() {
-  const { go } = useNav()
+  const { go, params } = useNav()
   const { data: accounts, reload } = useQuery<any[]>('smtp:list', [])
   const { data: cats, reload: reloadCats } = useQuery<Record<number, number[]>>('smtp:accountCategories', [])
   const { data: categories } = useQuery<any[]>('leads:categories', [])
@@ -27,6 +27,9 @@ export function EmailAccountsPage() {
   const [pwFor, setPwFor] = useState<any>(null)
   const { run } = useAction()
   useEffect(() => setOffset(0), [filter, search])
+  useEffect(() => {
+    if (params.add) setAdding(true)
+  }, [params.add])
 
   const rotate = settings?.email?.rotateAccounts ?? true
   const catName = (id: number) => categories?.find((c) => c.id === id)?.name ?? '—'

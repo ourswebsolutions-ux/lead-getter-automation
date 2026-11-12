@@ -533,5 +533,22 @@ CREATE TABLE email_templates (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 `
+  },
+  {
+    version: 7,
+    name: 'assistant chat',
+    sql: `
+CREATE TABLE assistant_messages (
+  id INTEGER PRIMARY KEY,
+  role TEXT NOT NULL CHECK (role IN ('user','assistant','tool')),
+  content TEXT NOT NULL,
+  data TEXT,                      -- JSON: tool name/args/result, buttons, pending action
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE assistant_state (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+`
   }
 ]

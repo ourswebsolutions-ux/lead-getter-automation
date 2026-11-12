@@ -8,7 +8,7 @@ import { onEvent, rpc } from './lib/rpc'
 import { applyTheme } from './lib/theme'
 import { Dashboard } from './pages/Dashboard'
 import { MapsPage } from './pages/discovery/Maps'
-import { LinkedInPage } from './pages/discovery/LinkedIn'
+import { AssistantPage } from './pages/assistant/Assistant'
 import { ApolloPage } from './pages/discovery/Apollo'
 import { VerificationPage } from './pages/Verification'
 import { AgentPage } from './pages/agent/Agent'
@@ -19,9 +19,9 @@ import { ConversationsPage } from './pages/Conversations'
 import { SettingsPage } from './pages/Settings'
 
 const PAGES: Record<PageId, () => ReactElement | null> = {
+  assistant: AssistantPage,
   dashboard: Dashboard,
   maps: MapsPage,
-  linkedin: LinkedInPage,
   apollo: ApolloPage,
   verification: VerificationPage,
   agent: AgentPage,
@@ -43,7 +43,7 @@ function readStored<T>(k: string, d: T): T {
 }
 
 export function App() {
-  const [nav, setNav] = useState<{ page: PageId; params: Record<string, any> }>(() => ({ page: readStored<PageId>('lge.page', 'dashboard'), params: {} }))
+  const [nav, setNav] = useState<{ page: PageId; params: Record<string, any> }>(() => ({ page: readStored<PageId>('lge.page', 'assistant'), params: {} }))
   const [collapsed, setCollapsed] = useState(() => readStored('lge.sidebar', false))
 
   const go = useCallback((page: PageId, params: Record<string, any> = {}) => {

@@ -17,6 +17,7 @@ import * as email from './services/email'
 import { addEmailAccount } from './services/emailAutoConfig'
 import * as campaigns from './services/campaigns'
 import * as templates from './services/templates'
+import * as assistant from './services/ai/assistant'
 import * as analytics from './services/analytics'
 import * as gmaps from './services/maps'
 import * as license from './services/subscription'
@@ -287,6 +288,16 @@ const handlers: Record<string, Handler> = {
   'campaigns:resume': (id: number) => campaigns.resumeCampaign(id),
   'campaigns:stop': (id: number) => campaigns.stopCampaign(id),
   'campaigns:preview': (id: number, leadId: number, step?: number) => campaigns.previewMessage(id, leadId, step),
+  'assistant:messages': () => assistant.listMessages(),
+  'assistant:ask': (text: string) => {
+    if (assistant.isBusy()) throw new Error('Still working on your last message — wait a moment or press Stop.')
+    void assistant.ask(text)
+  },
+  'assistant:stop': () => assistant.stop(),
+  'assistant:confirm': () => assistant.confirmPending(),
+  'assistant:cancel': () => assistant.cancelPending(),
+  'assistant:clear': () => assistant.clearChat(),
+  'assistant:live': () => assistant.liveStatus(),
   'templates:list': () => templates.listTemplates(),
   'templates:save': (t) => templates.saveTemplate(t),
   'templates:duplicate': (id: number) => templates.duplicateTemplate(id),

@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import {
-  LayoutDashboard, MapPin, Briefcase, Rocket, MailCheck, Bot, Send, AtSign, Mails,
+  LayoutDashboard, MapPin, Sparkles, Rocket, MailCheck, Bot, Send, AtSign, Mails,
   MessagesSquare, Settings, Bell, FileText, ChevronLeft, ChevronRight, ChevronRight as Chev, Search, RefreshCw
 } from 'lucide-react'
 import { useNav, type PageId } from '../lib/nav'
@@ -33,6 +33,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         title: 'Menu',
         short: 'Menu',
         items: [
+          { id: 'assistant', label: 'AI Assistant', icon: ic(Sparkles) },
           { id: 'dashboard', label: 'Dashboard', icon: ic(LayoutDashboard) },
           { id: 'conversations', label: 'Conversations', icon: ic(MessagesSquare), badge: counts?.unread },
           { id: 'agent', label: 'AI Sales Agent', icon: ic(Bot), badge: counts?.pendingApprovals }
@@ -43,7 +44,6 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         short: 'Find',
         items: [
           { id: 'maps', label: 'Google Maps Search', icon: ic(MapPin) },
-          { id: 'linkedin', label: 'LinkedIn Leads', icon: ic(Briefcase) },
           { id: 'apollo', label: 'Apollo Leads', icon: ic(Rocket) },
           { id: 'verification', label: 'Email Verification', icon: ic(MailCheck) }
         ]

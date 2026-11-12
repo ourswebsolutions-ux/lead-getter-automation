@@ -473,6 +473,10 @@ export interface EmailLaunchInput {
   /** Daily sending hours (every day), e.g. 09:00–20:00. */
   hours?: { start: string; end: string } | null
   delayMinutes?: number
+  /** AI writes each email for the lead (templates, if any, are used as the base idea). */
+  aiPersonalize?: boolean
+  /** What to offer, e.g. "website development" — guidance for AI-written emails. */
+  offer?: string
 }
 
 /** Leads in the categories that have a verified (green/yellow) email: the ones a campaign will email. */
@@ -483,20 +487,27 @@ export function emailAudienceCount(categoryIds: number[]): number {
 
 /** Creates an email campaign from saved templates, categories and accounts, adds the leads and starts (or schedules) it. */
 export function launchEmailCampaign(input: EmailLaunchInput): { id: number; added: number; scheduled: boolean } {
-  if (!input.templateIds?.length) throw new Error('Choose at least one template.')
+  if (!input.templateIds?.length && !input.aiPersonalize) throw new Error('Choose at least one template.')
+  if (input.aiPersonalize && !aiConfigured()) throw new Error('AI-written emails need an AI provider. Add one in AI Sales Agent → Providers.')
   if (!input.categoryIds?.length) throw new Error('Choose at least one category.')
   if (!input.accountIds?.length) throw new Error('Choose at least one email account.')
-  const templates = input.templateIds
+  const templates = (input.templateIds ?? [])
     .map((id) => db().get<{ id: number; name: string; subject: string; body: string }>('SELECT * FROM email_templates WHERE id = ?', id))
     .filter(Boolean) as { name: string; subject: string; body: string }[]
-  if (!templates.length) throw new Error('The selected templates no longer exist.')
+  if (!templates.length && !input.aiPersonalize) throw new Error('The selected templates no longer exist.')
+  if (!templates.length)
+    templates.push({
+      name: 'AI written',
+      subject: 'Quick idea for {business_name}',
+      body: `Hi {contact_name},\n\nA short, specific note to {business_name} ({category} in {city}) offering ${input.offer?.trim() || 'our services'}, based on what they do.`
+    })
   const cats = db().all<{ name: string }>(`SELECT name FROM lead_categories WHERE id IN (${input.categoryIds.map(() => '?').join(',')})`, ...input.categoryIds)
   const name = input.name?.trim() || `${cats.map((c) => c.name).join(', ') || 'Email'} — ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
   const hours = input.hours?.start && input.hours?.end ? { start: input.hours.start, end: input.hours.end, days: [0, 1, 2, 3, 4, 5, 6] } : null
   const id = createCampaign(
     'email',
     name,
-    { accountIds: input.accountIds, sendWindow: hours, emailPolicy: 'safe_risky', delayMinutes: input.delayMinutes ?? DEFAULT_CONFIG.email.delayMinutes, timezoneOffsetMinutes: new Date().getTimezoneOffset() },
+    { accountIds: input.accountIds, sendWindow: hours, aiPersonalize: !!input.aiPersonalize, aiGuidance: input.offer?.trim() ? `Offer: ${input.offer.trim()}` : undefined, emailPolicy: 'safe_risky', delayMinutes: input.delayMinutes ?? DEFAULT_CONFIG.email.delayMinutes, timezoneOffsetMinutes: new Date().getTimezoneOffset() },
     templates.map((t) => ({ kind: 'initial' as const, subject: t.subject, body: t.body }))
   )
   try {
