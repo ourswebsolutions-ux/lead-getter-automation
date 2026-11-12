@@ -8,6 +8,8 @@ vi.mock('../src/main/services/maps/emailFinder', async (orig) => ({
 }))
 
 import { EmailVerifier, validSyntax } from '../src/main/services/maps/emailVerify'
+import { isPlausibleEmail } from '../src/main/services/sources/website'
+import { cleanupJunkEmails } from '../src/main/services/maps/background'
 import { runBackgroundOnce, setVerifierForTests, backgroundStatus, queueAllForVerification } from '../src/main/services/maps/background'
 import { updateSettings } from '../src/main/core/settings'
 import { upsertLead, attachEmail } from '../src/main/services/leads'
@@ -55,7 +57,9 @@ describe('free SMTP email verification (ported from Lead Finder)', () => {
     expect(a.get('info@shop.pk')!.status).toBe('verified')
     expect(a.get('ghost@shop.pk')!.status).toBe('invalid')
     expect((await v.checkDomain('catchall.pk', ['anyone@catchall.pk'])).get('anyone@catchall.pk')!.status).toBe('catch_all')
-    expect((await v.checkDomain('policy.pk', ['info@policy.pk'])).get('info@policy.pk')!.status).toBe('unknown')
+    const pol = (await v.checkDomain('policy.pk', ['info@policy.pk'])).get('info@policy.pk')!
+    expect(pol.status).toBe('unknown')
+    expect(pol.reason).toMatch(/spam list/)
     expect((await v.checkDomain('nomail.pk', ['info@nomail.pk'])).get('info@nomail.pk')!.status).toBe('invalid')
     expect(validSyntax('bad@@x.pk')).toBe(false)
   })
@@ -133,5 +137,16 @@ describe('background email finder and verify switch', () => {
     expect(backgroundStatus().verifyPending).toBe(0)
     // The progress ring's numbers for this round: 4 of 4 verified.
     expect(backgroundStatus()).toMatchObject({ verifyDone: 4, verifyTotal: 4, verifying: false })
+  })
+
+  it('rejects glued or fake addresses and cleans up old ones', () => {
+    for (const bad of ['info.dealsexpress@gmail.comphone', 'care@stylo.pkcustomer', '0312-1600686urbanstepsofficials@gmail.com', 'whatsapp@0312-1600686.email', 'choice@stylo.crafted'])
+      expect(isPlausibleEmail(bad), bad).toBe(false)
+    for (const good of ['care@stylo.pk', 'info@valenciapakistan.com', 'hello@shop.store', 'a.b@x.co.uk']) expect(isPlausibleEmail(good), good).toBe(true)
+    const lead = addResult('Junk', 'https://junk.pk')
+    attachEmail(lead, 'info.dealsexpress@gmail.comphone')
+    attachEmail(lead, 'info@junk.pk')
+    expect(cleanupJunkEmails()).toBe(1)
+    expect((listResults({}).rows[0] as any).email).toBe('info@junk.pk')
   })
 })

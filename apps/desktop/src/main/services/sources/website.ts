@@ -79,6 +79,24 @@ const EMAIL_IN_TEXT = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,24}/gi
 const OBFUSCATED = /([A-Z0-9._%+-]+)\s*(?:\[at\]|\(at\)|\{at\}|\s+at\s+)\s*([A-Z0-9-]+(?:\s*(?:\[dot\]|\(dot\)|\s+dot\s+|\.)\s*[A-Z0-9-]+)+)/gi
 const BAD_EMAIL = /\.(png|jpe?g|gif|svg|webp|css|js|ico|check|local|test|invalid|example|html?|php)$|^(example|test|your|name|email|user|noreply|no-reply|donotreply|do-not-reply)@|@(example|domain|email|sentry|wixpress|sentry-next|godaddy|checkout)\.|@[a-z0-9.-]*sentry[a-z0-9.-]*\.|@[0-9]+x\./i
 
+// Domain endings accepted for emails found on websites: every 2-letter country code plus common
+// generic endings. Text glued onto an address ("x@shop.comPhone", "x@shop.pkcustomer") is rejected.
+const COMMON_TLDS = new Set(
+  'com net org info biz edu gov mil int io co ai app dev tech online site store shop xyz me tv cc us pro name mobi asia agency company business email solutions services digital media studio design group global world marketing consulting academy center clinic restaurant cafe salon travel realestate properties homes health care law legal finance money bank insurance hotel fashion clothing shoes fitness education school website live life today blog news club'.split(' ')
+)
+
+/** Rejects addresses that are really glued text, phone numbers or placeholders. */
+export function isPlausibleEmail(email: string): boolean {
+  const [local, domain] = email.split('@')
+  if (!local || !domain) return false
+  const labels = domain.split('.')
+  const tld = labels[labels.length - 1]
+  if (!(tld.length === 2 || COMMON_TLDS.has(tld))) return false
+  if (labels.some((l) => /^\d[\d-]{5,}$/.test(l))) return false // a phone number as domain
+  if (/^\+?\d{3,}[-\s]?\d{4,}/.test(local)) return false // phone number glued in front
+  return true
+}
+
 function decodeEntities(s: string): string {
   return s
     .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
@@ -118,7 +136,7 @@ export function extractEmails(html: string, text?: string): string[] {
   const found = new Set<string>()
   const add = (e: string | null | undefined) => {
     const n = normalizeEmail(e ?? '')
-    if (n && !BAD_EMAIL.test(n)) found.add(n)
+    if (n && !BAD_EMAIL.test(n) && isPlausibleEmail(n)) found.add(n)
   }
   const $ = cheerio.load(html)
   $('a[href^="mailto:"]').each((_, el) => add(decodeURIComponent(($(el).attr('href') ?? '').slice(7).split('?')[0])))

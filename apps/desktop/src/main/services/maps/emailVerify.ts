@@ -22,6 +22,14 @@ export interface VerifyResult {
 }
 
 const SYNTAX = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]{1,64}@(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$/i
+/** Plain-language reason when a mail server refuses to answer this internet connection. */
+export function policyReason(text: string): string {
+  if (/dynamic|residential|reverse dns|ptr/i.test(text)) return 'the mail server does not accept checks from home/dynamic internet connections'
+  if (/spamhaus|\bpbl\b|\bsbl\b|blocked using|listed|blacklist|black list/i.test(text)) return 'the mail server refused this internet connection (its IP is on a spam list, common for home connections)'
+  if (/relay/i.test(text)) return 'the mail server would not say whether the mailbox exists'
+  return 'the mail server refused the check'
+}
+
 const POLICY = /block|spam|blacklist|black list|listed|policy|reputation|\bpbl\b|\bsbl\b|spamhaus|not allowed|denied|reverse dns|ptr|helo|client host|rejected due to|authentication|relay|try again later/i
 
 export function validSyntax(email: string): boolean {
@@ -35,7 +43,10 @@ interface Session {
 
 type ConnectFn = (opts: { host: string; port: number }) => net.Socket
 
-export function smtpSession(host: string, { port = 25, timeout = 12_000, connect = net.connect as unknown as ConnectFn } = {}): Promise<Session> {
+/** IPv4 first: many home networks have no working IPv6 route, which makes connections time out. */
+const connectIPv4First: ConnectFn = (o) => net.connect({ ...o, family: 4 })
+
+export function smtpSession(host: string, { port = 25, timeout = 12_000, connect = connectIPv4First } = {}): Promise<Session> {
   return new Promise((resolve, reject) => {
     const sock = connect({ host, port })
     let buf = ''
@@ -185,17 +196,19 @@ export class EmailVerifier {
     }
     let session: Session | null = null
     let lastErr: any = null
-    for (const host of info.hosts.slice(0, 2)) {
+    for (const host of info.hosts.slice(0, 3)) {
       try {
-        session = await smtpSession(this.opts.hostFor ? this.opts.hostFor(host) : host, { port: this.opts.port ?? 25, timeout: this.opts.timeout ?? 12_000, connect: this.opts.connect })
+        session = await smtpSession(this.opts.hostFor ? this.opts.hostFor(host) : host, { port: this.opts.port ?? 25, timeout: this.opts.timeout ?? 12_000, ...(this.opts.connect ? { connect: this.opts.connect } : {}) })
         break
       } catch (err) {
         lastErr = err
       }
     }
     if (!session) {
-      if (['ETIMEDOUT', 'ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH', 'ECLOSED'].includes(lastErr?.code)) this.unreachable++
-      for (const e of pending) remember(e, { status: 'unknown', reason: 'the mail server could not be reached' })
+      const greetingRefused = lastErr?.code === 'EGREETING'
+      if (!greetingRefused && ['ETIMEDOUT', 'ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH', 'ECLOSED'].includes(lastErr?.code)) this.unreachable++
+      for (const e of pending)
+        remember(e, { status: 'unknown', reason: greetingRefused ? policyReason(lastErr?.reply?.text ?? '') : "the domain's mail server did not respond" })
       return out
     }
     this.unreachable = 0
@@ -207,11 +220,13 @@ export class EmailVerifier {
       r = await session.send('MAIL FROM:<>')
       if (r.code !== 250) throw Object.assign(new Error('sender refused'), { reply: r })
       const s = session
+      let lastPolicy = ''
       const rcpt = async (addr: string) => {
         const res = await s.send(`RCPT TO:<${addr}>`)
         if (res.code === 250 || res.code === 251) return 'accepted'
         if ([550, 551, 553, 554].includes(res.code) && !POLICY.test(res.text)) return 'rejected'
         if (res.code === 552 && /mailbox|user|recipient/i.test(res.text) && !POLICY.test(res.text)) return 'rejected'
+        if (POLICY.test(res.text)) lastPolicy = res.text
         return 'unknown'
       }
       if (info.catchAll === undefined) {
@@ -227,7 +242,7 @@ export class EmailVerifier {
         if (a === 'accepted' && info.catchAll === false) remember(e, { status: 'verified', reason: 'the mail server confirmed the mailbox' })
         else if (a === 'accepted') remember(e, { status: 'unknown', reason: 'accepted, but the server did not say whether it accepts every address' })
         else if (a === 'rejected') remember(e, { status: 'invalid', reason: 'the mail server says the mailbox does not exist' })
-        else remember(e, { status: 'unknown', reason: 'the mail server gave no clear answer' })
+        else remember(e, { status: 'unknown', reason: lastPolicy ? policyReason(lastPolicy) : 'the mail server gave no clear answer' })
       }
     } catch (err: any) {
       for (const e of pending) if (!out.has(e)) remember(e, { status: 'unknown', reason: err?.reply ? `the mail server refused the check (${err.reply.code})` : 'the conversation with the mail server failed' })

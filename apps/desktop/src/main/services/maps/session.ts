@@ -365,6 +365,7 @@ const RESULT_SELECT = `
     l.business_name, l.phone, l.website, l.address,
     (SELECT ea.email FROM lead_emails le JOIN email_addresses ea ON ea.id = le.email_id WHERE le.lead_id = l.id ORDER BY le.is_primary DESC LIMIT 1) email,
     (SELECT ea.verification_status FROM lead_emails le JOIN email_addresses ea ON ea.id = le.email_id WHERE le.lead_id = l.id ORDER BY le.is_primary DESC LIMIT 1) email_status,
+    (SELECT vr.reason FROM lead_emails le JOIN verification_records vr ON vr.email_id = le.email_id WHERE le.lead_id = l.id ORDER BY le.is_primary DESC, vr.id DESC LIMIT 1) email_reason,
     (SELECT group_concat(ea.email, '; ') FROM lead_emails le JOIN email_addresses ea ON ea.id = le.email_id WHERE le.lead_id = l.id) emails
   FROM maps_results r JOIN leads l ON l.id = r.lead_id`
 

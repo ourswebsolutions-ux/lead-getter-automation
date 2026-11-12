@@ -5,6 +5,7 @@ import { getSettings } from '../../core/settings'
 import { attachEmail } from '../leads'
 import { callReacher } from '../verification'
 import { findSiteEmails } from './emailFinder'
+import { isPlausibleEmail } from '../sources/website'
 import { EmailVerifier, toAppStatus, type VerifyResult } from './emailVerify'
 import { getResultByKey } from './session'
 import type { ChromeSession } from './chrome'
@@ -114,7 +115,8 @@ async function verifyDomain(domain: string): Promise<void> {
   for (const row of rows) {
     let r: VerifyResult = results.get(row.email.toLowerCase()) ?? { status: 'unknown', reason: 'no answer' }
     // This computer cannot reach mail servers (port 25 blocked): use Reacher if one is configured.
-    if (r.status === 'unknown' && verifier.blocked && getSettings().integrations.reacherUrl && Date.now() > reacherDownUntil) {
+    // Mail servers that refuse to answer this connection: ask Reacher (e.g. on a VPS) if one is configured.
+    if (r.status === 'unknown' && getSettings().integrations.reacherUrl && Date.now() > reacherDownUntil) {
       try {
         const o = await callReacher(row.email)
         r = { status: o.status === 'safe' ? 'verified' : o.status === 'invalid' ? 'invalid' : o.status === 'risky' ? 'catch_all' : 'unknown', reason: o.reasons.join('; ') }
@@ -188,7 +190,32 @@ export function queueAllForVerification(): number {
   ).changes
 }
 
+/**
+ * Removes addresses saved by older versions that are really glued text (e.g. "x@gmail.comphone")
+ * from Google Maps results. Returns how many were removed.
+ */
+export function cleanupJunkEmails(): number {
+  const rows = db().all<{ id: number; email: string }>(
+    `SELECT DISTINCT ea.id, ea.email FROM email_addresses ea JOIN lead_emails le ON le.email_id = ea.id JOIN maps_results r ON r.lead_id = le.lead_id`
+  )
+  let removed = 0
+  db().tx(() => {
+    for (const r of rows) {
+      if (isPlausibleEmail(r.email) && !/@(checkout|example)\./i.test(r.email)) continue
+      db().run('DELETE FROM lead_emails WHERE email_id = ?', r.id)
+      if (!db().get('SELECT 1 FROM lead_emails WHERE email_id = ?', r.id)) db().run('DELETE FROM email_addresses WHERE id = ?', r.id)
+      removed++
+    }
+  })
+  // Leads whose primary email was removed get another one as primary.
+  db().run(`UPDATE lead_emails SET is_primary = 1 WHERE rowid IN (
+    SELECT MIN(le.rowid) FROM lead_emails le GROUP BY le.lead_id HAVING MAX(le.is_primary) = 0)`)
+  if (removed) log.info(`Removed ${removed} invalid email addresses from Google Maps results`)
+  return removed
+}
+
 export function startMapsBackground(d: typeof deps): void {
+  cleanupJunkEmails()
   deps = d
   timer = setInterval(() => void tick(), 5000)
 }
