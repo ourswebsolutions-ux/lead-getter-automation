@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Search, Square, MapPin, Tag, SlidersHorizontal, Download, Loader2, AlertTriangle, CheckCircle2, XCircle, Star, ExternalLink, X, Globe, ChevronDown } from 'lucide-react'
 import { rpc, useAction, useEvent, useQuery } from '../../lib/rpc'
 import { fmtNum } from '../../lib/format'
@@ -373,9 +374,16 @@ function Progress({ live }: { live: Live }) {
 function FiltersButton({ value, onChange, categories, count }: { value: Filters; onChange: (f: Filters) => void; categories: string[]; count: number }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const panel = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState({ top: 0, right: 0 })
   useEffect(() => {
     if (!open) return
-    const close = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false)
+    const r = ref.current?.getBoundingClientRect()
+    if (r) setPos({ top: r.bottom + 6, right: Math.max(8, window.innerWidth - r.right) })
+  }, [open])
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && !panel.current?.contains(e.target as Node) && setOpen(false)
     setTimeout(() => window.addEventListener('mousedown', close))
     return () => window.removeEventListener('mousedown', close)
   }, [open])
@@ -390,8 +398,8 @@ function FiltersButton({ value, onChange, categories, count }: { value: Filters;
       <Button icon={<SlidersHorizontal size={14} />} onClick={() => setOpen((o) => !o)}>
         Filters{count ? ` · ${count}` : ''}
       </Button>
-      {open && (
-        <div className="menu" style={{ position: 'absolute', right: 0, top: 38, width: 330, padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {open && createPortal(
+        <div ref={panel} className="menu" style={{ position: 'fixed', top: pos.top, right: pos.right, left: 'auto', width: 330, padding: 14, display: 'flex', flexDirection: 'column', gap: 12, zIndex: 120 }}>
           {tri('email', 'Email')}
           {tri('website', 'Website')}
           {tri('phone', 'Phone')}
@@ -408,6 +416,8 @@ function FiltersButton({ value, onChange, categories, count }: { value: Filters;
             <Button size="sm" variant="primary" onClick={() => setOpen(false)}>Done</Button>
           </div>
         </div>
+      ,
+        document.body
       )}
     </div>
   )

@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import {
-  LayoutDashboard, MapPin, Briefcase, Rocket, MailCheck, Users, Bot, Smartphone, Send, AtSign, Mails,
+  LayoutDashboard, MapPin, Briefcase, Rocket, MailCheck, Users, Bot, Send, AtSign, Mails,
   MessagesSquare, Settings, Bell, ChevronLeft, ChevronRight, ChevronRight as Chev, Search, RefreshCw
 } from 'lucide-react'
 import { useNav, type PageId } from '../lib/nav'
@@ -53,7 +53,6 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         title: 'Outreach',
         short: 'Send',
         items: [
-          { id: 'wa-accounts', label: 'WhatsApp Accounts', icon: ic(Smartphone) },
           { id: 'wa-campaigns', label: 'WhatsApp Campaigns', icon: ic(Send) },
           { id: 'email-accounts', label: 'Email Accounts', icon: ic(AtSign) },
           { id: 'email-campaigns', label: 'Email Campaigns', icon: ic(Mails) }

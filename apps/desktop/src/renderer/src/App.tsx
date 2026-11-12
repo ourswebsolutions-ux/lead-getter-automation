@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactElement } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { ConfirmHost, Toasts } from './components/ui'
 import { SubscriptionButton } from './components/Subscription'
+import { WhatsAppMenu } from './components/WhatsAppMenu'
 import { NavContext, type PageId } from './lib/nav'
 import { onEvent, rpc } from './lib/rpc'
 import { applyTheme } from './lib/theme'
@@ -12,7 +13,6 @@ import { ApolloPage } from './pages/discovery/Apollo'
 import { VerificationPage } from './pages/Verification'
 import { LeadsPage } from './pages/leads/Leads'
 import { AgentPage } from './pages/agent/Agent'
-import { WhatsAppAccountsPage } from './pages/outreach/WhatsAppAccounts'
 import { WhatsAppCampaignsPage, EmailCampaignsPage } from './pages/outreach/Campaigns'
 import { EmailAccountsPage } from './pages/outreach/EmailAccounts'
 import { ConversationsPage } from './pages/Conversations'
@@ -26,7 +26,6 @@ const PAGES: Record<PageId, () => ReactElement | null> = {
   verification: VerificationPage,
   leads: LeadsPage,
   agent: AgentPage,
-  'wa-accounts': WhatsAppAccountsPage,
   'wa-campaigns': WhatsAppCampaignsPage,
   'email-accounts': EmailAccountsPage,
   'email-campaigns': EmailCampaignsPage,
@@ -80,6 +79,7 @@ export function App() {
         <Sidebar collapsed={collapsed} onToggle={toggle} />
         <main className="main">
           <div className="topbar">
+            <WhatsAppMenu />
             <SubscriptionButton />
           </div>
           <Page key={nav.page + JSON.stringify(nav.params)} />

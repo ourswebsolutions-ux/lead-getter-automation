@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Users, MailCheck, MailWarning, MailX, Sparkles, Smartphone, AtSign, Send, Mails, Inbox, Bot, ClipboardCheck } from 'lucide-react'
 import { useQuery } from '../lib/rpc'
 import { useNav } from '../lib/nav'
+import { openWhatsApp } from '../components/WhatsAppMenu'
 import { fmtNum, pct, fmtRelative } from '../lib/format'
 import { Card, PageHeader, Stat, StatusPill, Segmented, Button, EmptyState } from '../components/ui'
 import { TimeArea, MultiLine, HBars, fillDays } from '../components/charts'
@@ -67,7 +68,7 @@ export function Dashboard() {
             <TimeArea data={data ? fillDays(data.leadsOverTime, data.range.from, data.range.to, { leads: 0 }) : []} dataKey="leads" name="Leads" />
           </Card>
           <Card title="System status" tight>
-            <StatusRow icon={<Smartphone size={15} />} label="WhatsApp accounts" value={`${s?.activeWhatsApp ?? 0} of ${s?.totalWhatsApp ?? 0} connected`} status={s?.activeWhatsApp ? 'connected' : s?.totalWhatsApp ? 'disconnected' : null} onClick={() => go('wa-accounts')} />
+            <StatusRow icon={<Smartphone size={15} />} label="WhatsApp accounts" value={`${s?.activeWhatsApp ?? 0} of ${s?.totalWhatsApp ?? 0} connected`} status={s?.activeWhatsApp ? 'connected' : s?.totalWhatsApp ? 'disconnected' : null} onClick={openWhatsApp} />
             <StatusRow icon={<AtSign size={15} />} label="SMTP accounts" value={`${s?.activeSmtp ?? 0} of ${s?.totalSmtp ?? 0} healthy`} status={s?.activeSmtp ? 'ok' : s?.totalSmtp ? 'untested' : null} onClick={() => go('email-accounts')} />
             <StatusRow icon={<Send size={15} />} label="WhatsApp campaigns" value={`${s?.activeWaCampaigns ?? 0} active`} status={s?.activeWaCampaigns ? 'running' : null} onClick={() => go('wa-campaigns')} />
             <StatusRow icon={<Mails size={15} />} label="Email campaigns" value={`${s?.activeEmailCampaigns ?? 0} active`} status={s?.activeEmailCampaigns ? 'running' : null} onClick={() => go('email-campaigns')} />
