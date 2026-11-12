@@ -16,6 +16,7 @@ import * as wa from './services/whatsapp'
 import * as email from './services/email'
 import { addEmailAccount } from './services/emailAutoConfig'
 import * as campaigns from './services/campaigns'
+import * as templates from './services/templates'
 import * as analytics from './services/analytics'
 import * as gmaps from './services/maps'
 import * as license from './services/subscription'
@@ -37,7 +38,7 @@ const MAPS_EXPORT_COLUMNS: [string, string][] = [
 const LICENSED = new Set([
   'maps:start',
   'discovery:start', 'verification:single', 'verification:bulk', 'verification:file', 'verification:leads', 'verification:reverify',
-  'ai:research', 'ai:outreach', 'campaigns:start', 'campaigns:resume', 'conversations:send', 'agent:approve'
+  'ai:research', 'ai:outreach', 'campaigns:start', 'campaigns:launchEmail', 'campaigns:resume', 'conversations:send', 'agent:approve'
 ])
 
 const handlers: Record<string, Handler> = {
@@ -286,6 +287,12 @@ const handlers: Record<string, Handler> = {
   'campaigns:resume': (id: number) => campaigns.resumeCampaign(id),
   'campaigns:stop': (id: number) => campaigns.stopCampaign(id),
   'campaigns:preview': (id: number, leadId: number, step?: number) => campaigns.previewMessage(id, leadId, step),
+  'templates:list': () => templates.listTemplates(),
+  'templates:save': (t) => templates.saveTemplate(t),
+  'templates:duplicate': (id: number) => templates.duplicateTemplate(id),
+  'templates:delete': (id: number) => templates.deleteTemplate(id),
+  'campaigns:launchEmail': (input) => campaigns.launchEmailCampaign(input),
+  'campaigns:emailAudience': (categoryIds: number[]) => campaigns.emailAudienceCount(categoryIds ?? []),
   'campaigns:defaults': (channel: 'whatsapp' | 'email') => campaigns.DEFAULT_CONFIG[channel],
   'suppression:list': (channel?) => campaigns.suppressionList(channel),
   'suppression:add': (channel, address: string, reason?: string) => campaigns.addSuppression(channel, address, reason),

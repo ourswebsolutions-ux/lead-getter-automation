@@ -366,7 +366,7 @@ async function processCampaign(c: any): Promise<void> {
   // Compose
   let step: any
   if (c.channel === 'whatsapp') step = initialSteps[r.id % Math.max(1, initialSteps.length)]
-  else step = isFollowup ? followups[r.step_index - 1] : initialSteps[0]
+  else step = isFollowup ? followups[r.step_index - 1] : initialSteps[r.id % Math.max(1, initialSteps.length)]
   if (!step) {
     db().run("UPDATE campaign_recipients SET status = 'completed', next_send_at = NULL WHERE id = ?", r.id)
     return
@@ -459,4 +459,55 @@ export function addSuppression(channel: Channel, address: string, reason = 'Manu
 }
 export function removeSuppression(channel: Channel, address: string): void {
   db().run('DELETE FROM suppression_list WHERE channel = ? AND address = ?', channel, address)
+}
+
+// ---------------------------------------------------------------- one-step email campaign
+
+export interface EmailLaunchInput {
+  name?: string
+  templateIds: number[]
+  categoryIds: number[]
+  accountIds: number[]
+  /** Local ISO date-time to start at; empty = start now. */
+  startAt?: string | null
+  /** Daily sending hours (every day), e.g. 09:00–20:00. */
+  hours?: { start: string; end: string } | null
+  delayMinutes?: number
+}
+
+/** Leads in the categories that have a verified (green/yellow) email: the ones a campaign will email. */
+export function emailAudienceCount(categoryIds: number[]): number {
+  if (!categoryIds.length) return 0
+  return leadIdsForFilter({ categoryIds, verification: ['safe', 'risky'] } as LeadFilter).length
+}
+
+/** Creates an email campaign from saved templates, categories and accounts, adds the leads and starts (or schedules) it. */
+export function launchEmailCampaign(input: EmailLaunchInput): { id: number; added: number; scheduled: boolean } {
+  if (!input.templateIds?.length) throw new Error('Choose at least one template.')
+  if (!input.categoryIds?.length) throw new Error('Choose at least one category.')
+  if (!input.accountIds?.length) throw new Error('Choose at least one email account.')
+  const templates = input.templateIds
+    .map((id) => db().get<{ id: number; name: string; subject: string; body: string }>('SELECT * FROM email_templates WHERE id = ?', id))
+    .filter(Boolean) as { name: string; subject: string; body: string }[]
+  if (!templates.length) throw new Error('The selected templates no longer exist.')
+  const cats = db().all<{ name: string }>(`SELECT name FROM lead_categories WHERE id IN (${input.categoryIds.map(() => '?').join(',')})`, ...input.categoryIds)
+  const name = input.name?.trim() || `${cats.map((c) => c.name).join(', ') || 'Email'} — ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
+  const hours = input.hours?.start && input.hours?.end ? { start: input.hours.start, end: input.hours.end, days: [0, 1, 2, 3, 4, 5, 6] } : null
+  const id = createCampaign(
+    'email',
+    name,
+    { accountIds: input.accountIds, sendWindow: hours, emailPolicy: 'safe_risky', delayMinutes: input.delayMinutes ?? DEFAULT_CONFIG.email.delayMinutes, timezoneOffsetMinutes: new Date().getTimezoneOffset() },
+    templates.map((t) => ({ kind: 'initial' as const, subject: t.subject, body: t.body }))
+  )
+  try {
+    const { added } = addRecipients(id, { filter: { categoryIds: input.categoryIds, verification: ['safe', 'risky'] } as LeadFilter })
+    if (!added) throw new Error('No leads with a verified email in these categories (or all were already added).')
+    const startAt = input.startAt ? new Date(input.startAt) : null
+    const scheduled = !!startAt && startAt.getTime() > Date.now() + 30_000
+    startCampaign(id, scheduled ? startAt!.toISOString() : null)
+    return { id, added, scheduled }
+  } catch (e) {
+    db().run('DELETE FROM campaigns WHERE id = ?', id)
+    throw e
+  }
 }

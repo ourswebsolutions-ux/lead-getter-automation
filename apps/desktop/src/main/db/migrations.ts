@@ -519,5 +519,19 @@ CREATE TABLE smtp_account_categories (
 );
 CREATE INDEX ix_smtp_cat_category ON smtp_account_categories(category_id);
 `
+  },
+  {
+    version: 6,
+    name: 'email templates',
+    sql: `
+CREATE TABLE email_templates (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  body TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`
   }
 ]

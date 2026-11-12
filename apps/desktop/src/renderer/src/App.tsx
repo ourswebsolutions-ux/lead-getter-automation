@@ -14,6 +14,7 @@ import { VerificationPage } from './pages/Verification'
 import { AgentPage } from './pages/agent/Agent'
 import { WhatsAppCampaignsPage, EmailCampaignsPage } from './pages/outreach/Campaigns'
 import { EmailAccountsPage } from './pages/outreach/EmailAccounts'
+import { EmailTemplatesPage } from './pages/outreach/EmailTemplates'
 import { ConversationsPage } from './pages/Conversations'
 import { SettingsPage } from './pages/Settings'
 
@@ -26,6 +27,7 @@ const PAGES: Record<PageId, () => ReactElement | null> = {
   agent: AgentPage,
   'wa-campaigns': WhatsAppCampaignsPage,
   'email-accounts': EmailAccountsPage,
+  'email-templates': EmailTemplatesPage,
   'email-campaigns': EmailCampaignsPage,
   conversations: ConversationsPage,
   settings: SettingsPage

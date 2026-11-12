@@ -56,12 +56,15 @@ export function seedSampleData(): void {
     recordMessage(c.id, { direction: 'out', author: 'campaign', subject: `Quick idea for ${l.business_name}`, body: `Hi, I came across ${l.business_name} and had a quick idea for your website…`, status: i === 4 ? 'failed' : 'sent' })
     if (i % 3 === 0) recordMessage(c.id, { direction: 'in', author: 'contact', body: 'Thanks, tell me more.' })
   })
+  db().run("INSERT INTO email_templates (name, subject, body) VALUES ('Website offer', 'Quick idea for {business_name}', ?), ('Free mock-up', '{business_name} — a free website mock-up', ?), ('Short follow-up', 'Re: {business_name}', 'Hi {contact_name},\n\nJust following up on my last email.\n\nThanks')",
+    '{Hi|Hello} {contact_name},\n\nI came across {business_name} in {city} and loved what you do. I build fast, modern websites that bring more customers from Google.\n\nWould you be open to a quick look at what I could do for you?\n\nBest regards,\nAli',
+    'Hi {contact_name},\n\nI made a quick website mock-up idea for {business_name}. Want me to send it over?\n\nAli')
   const cid = createCampaign('whatsapp', 'Dubai restaurants — November', { accountIds: [] }, [{ kind: 'variant', body: 'Hi {contact_name}, I came across {business_name} in {city}…' }])
   addRecipients(cid, { filter: { cities: ['Dubai'] } })
 }
 
 export async function runCapture(dir: string): Promise<void> {
-  const pages = ['dashboard', 'leads', 'conversations', 'agent', 'maps', 'verification', 'wa-campaigns', 'email-accounts', 'settings']
+  const pages = ['dashboard', 'leads', 'conversations', 'agent', 'maps', 'verification', 'wa-campaigns', 'email-accounts', 'email-templates', 'settings']
   mkdirSync(dir, { recursive: true })
   const win = BrowserWindow.getAllWindows()[0]
   await new Promise((r) => setTimeout(r, 2500))
@@ -75,6 +78,13 @@ export async function runCapture(dir: string): Promise<void> {
       writeFileSync(join(dir, `${theme}-${p}.png`), img.toPNG())
     }
   }
+  await win.webContents.executeJavaScript(`localStorage.setItem('lge.page', '"email-campaigns"'); location.reload(); true`)
+  await new Promise((r) => setTimeout(r, 2500))
+  await win.webContents.executeJavaScript(`[...document.querySelectorAll('button')].find((b) => b.textContent.includes('New campaign')).click(); true`)
+  await new Promise((r) => setTimeout(r, 1200))
+  await win.webContents.executeJavaScript(`for (const g of document.querySelectorAll('.pick-group')) g.querySelector('.pick')?.click(); true`)
+  await new Promise((r) => setTimeout(r, 1200))
+  writeFileSync(join(dir, 'dark-email-launch.png'), (await win.webContents.capturePage()).toPNG())
   await win.webContents.executeJavaScript(`localStorage.setItem('lge.page', '"dashboard"'); location.reload(); true`)
   await new Promise((r) => setTimeout(r, 3000))
   await win.webContents.executeJavaScript(`window.dispatchEvent(new Event('lge:subscription')); true`)

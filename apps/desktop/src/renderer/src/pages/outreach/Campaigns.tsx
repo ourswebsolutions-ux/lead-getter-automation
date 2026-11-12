@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Plus, Play, Pause, Square, Trash2, Pencil, ArrowLeft, Eye, Users, Send, Mails, CalendarClock, Sparkles, Code2, Clock } from 'lucide-react'
 import { rpc, useAction, useQuery } from '../../lib/rpc'
+import { EmailLaunch } from './EmailLaunch'
 import { useNav } from '../../lib/nav'
 import { fmtNum, fmtRelative, fmtDate, pct } from '../../lib/format'
 import { Button, Card, Checkbox, DataTable, EmptyState, Field, Input, Modal, PageHeader, Pager, Select, Stat, StatusPill, SwitchRow, Tabs, Textarea, Callout, confirmDialog, TagInput, Progress } from '../../components/ui'
@@ -19,6 +20,7 @@ function CampaignsPage({ channel }: { channel: Channel }) {
   const { params } = useNav()
   const [view, setView] = useState<{ mode: 'list' } | { mode: 'detail'; id: number } | { mode: 'edit'; id?: number }>(params.id ? { mode: 'detail', id: params.id } : { mode: 'list' })
   if (view.mode === 'detail') return <CampaignDetail id={view.id} channel={channel} onBack={() => setView({ mode: 'list' })} onEdit={() => setView({ mode: 'edit', id: view.id })} />
+  if (view.mode === 'edit' && channel === 'email' && !view.id) return <EmailLaunch onBack={() => setView({ mode: 'list' })} onDone={(id) => setView({ mode: 'detail', id })} />
   if (view.mode === 'edit') return <CampaignBuilder id={view.id} channel={channel} onDone={(id) => setView(id ? { mode: 'detail', id } : { mode: 'list' })} />
   return <CampaignList channel={channel} onOpen={(id) => setView({ mode: 'detail', id })} onNew={() => setView({ mode: 'edit' })} />
 }
@@ -32,7 +34,7 @@ function CampaignList({ channel, onOpen, onNew }: { channel: Channel; onOpen: (i
         <PageHeader
           eyebrow="Outreach"
           title={wa ? 'WhatsApp Campaigns' : 'Email Campaigns'}
-          desc={wa ? 'Paced, personalised WhatsApp outreach across one or more connected numbers.' : 'Personalised email sequences with automatic follow-ups that stop when someone replies.'}
+          desc={wa ? 'Paced, personalised WhatsApp outreach across one or more connected numbers.' : 'Pick templates, categories and accounts — then run.'}
           actions={<Button variant="primary" icon={<Plus size={14} />} onClick={onNew}>New campaign</Button>}
         />
         <Card tight>
@@ -343,7 +345,7 @@ function CampaignDetail({ id, channel, onBack, onEdit }: { id: number; channel: 
           desc={c.status === 'scheduled' ? `Scheduled for ${fmtDate(c.scheduled_at, true)}` : c.started_at ? `Started ${fmtDate(c.started_at, true)} · last message ${fmtRelative(c.last_sent_at)}` : 'Draft — not started yet'}
           actions={
             <>
-              {['draft', 'paused', 'scheduled', 'stopped', 'completed'].includes(c.status) && <Button icon={<Pencil size={14} />} onClick={onEdit} disabled={c.status === 'running'}>Edit</Button>}
+              {channel === 'whatsapp' && ['draft', 'paused', 'scheduled', 'stopped', 'completed'].includes(c.status) && <Button icon={<Pencil size={14} />} onClick={onEdit} disabled={c.status === 'running'}>Edit</Button>}
               {c.status === 'draft' && <Button icon={<CalendarClock size={14} />} onClick={() => setSchedule(true)}>Schedule</Button>}
               {(c.status === 'draft' || c.status === 'scheduled') && <Button variant="primary" icon={<Play size={14} />} loading={busy === 'campaigns:start'} onClick={() => act('campaigns:start', 'Campaign started')}>Start now</Button>}
               {c.status === 'running' && <Button icon={<Pause size={14} />} onClick={() => act('campaigns:pause', 'Campaign paused')}>Pause</Button>}
