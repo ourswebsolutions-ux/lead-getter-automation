@@ -1,0 +1,36 @@
+appId: com.leadgetter.enterprise
+productName: Lead Getter Enterprise
+directories:
+  buildResources: build
+  output: release/${version}
+files:
+  - out/**
+  - package.json
+  - "!**/*.map"
+  - "!out/main/devCapture*"
+asarUnpack:
+  - "**/node_modules/@img/**"
+extraMetadata:
+  main: out/main/index.js
+win:
+  target: [nsis]
+  icon: build/icon.ico
+  artifactName: ${productName}-Setup-${version}.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+mac:
+  target: [dmg, zip]
+  icon: build/icon.png
+  category: public.app-category.business
+  hardenedRuntime: true
+linux:
+  target: [AppImage, deb]
+  icon: build/icons
+  executableName: lead-getter-enterprise
+  category: Office
+  maintainer: Lead Getter Enterprise
+publish:
+  provider: generic
+  url: https://updates.example.com/lead-getter-enterprise

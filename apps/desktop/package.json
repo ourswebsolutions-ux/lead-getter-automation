@@ -1,0 +1,62 @@
+{
+  "name": "lead-getter-enterprise",
+  "productName": "Lead Getter Enterprise",
+  "version": "1.0.0",
+  "description": "AI-powered lead generation and automated sales platform",
+  "main": "./out/main/index.js",
+  "author": {
+    "name": "Lead Getter Enterprise"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "test": "vitest run",
+    "start": "electron-vite preview",
+    "dist:linux": "electron-vite build && electron-builder --linux",
+    "dist:win": "electron-vite build && electron-builder --win",
+    "dist:mac": "electron-vite build && electron-builder --mac",
+    "test:live": "vitest run -c vitest.live.config.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
+    "@google/genai": "^3.2.0",
+    "@hapi/boom": "^10.0.1",
+    "baileys": "^7.0.0-rc14",
+    "cheerio": "^1.2.0",
+    "electron-updater": "^6.8.11",
+    "exceljs": "^4.4.0",
+    "groq-sdk": "^1.6.0",
+    "imapflow": "^2.11.0",
+    "mailparser": "^3.14.3",
+    "nodemailer": "^10.5.0",
+    "openai": "^7.55.0",
+    "papaparse": "^5.7.1",
+    "pino": "^10.4.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "@types/mailparser": "^3.9.0",
+    "@types/node": "^26.6.6",
+    "@types/nodemailer": "^8.0.2",
+    "@types/papaparse": "^5.5.2",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "electron": "^37.10.3",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "lucide-react": "^1.72.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "recharts": "^3.10.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
+  },
+  "homepage": "https://example.com/lead-getter-enterprise"
+}
