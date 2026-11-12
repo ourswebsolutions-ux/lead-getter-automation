@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { Search, Square, MapPin, Tag, SlidersHorizontal, Download, Loader2, AlertTriangle, CheckCircle2, XCircle, Star, ExternalLink, X } from 'lucide-react'
+import { Search, Square, MapPin, Tag, SlidersHorizontal, Download, Loader2, AlertTriangle, CheckCircle2, XCircle, Star, ExternalLink, X, Globe, ChevronDown } from 'lucide-react'
 import { rpc, useAction, useEvent, useQuery } from '../../lib/rpc'
 import { fmtNum } from '../../lib/format'
-import { Button, Checkbox, DataTable, EmptyState, Input, Menu, Pager, Segmented, Select, Switch, type Column } from '../../components/ui'
+import { Button, Checkbox, DataTable, EmptyState, Menu, Pager, Segmented, Select, Switch, type Column } from '../../components/ui'
 
 type BusinessType = 'all' | 'with' | 'without'
 type TriState = '' | 'with' | 'without'
@@ -15,6 +15,7 @@ interface Filters {
 }
 const NO_FILTERS: Filters = { email: '', website: '', phone: '', category: '', minRating: '' }
 
+const POPULAR = ['Restaurants', 'Shoe shops', 'Clothing stores', 'Salons', 'Real estate agencies', 'Clinics']
 const CATEGORIES = ['Restaurants', 'Cafes', 'Shoe stores', 'Clothing stores', 'Garments', 'Car dealers', 'Auto repair', 'Real estate agencies', 'Dentists', 'Clinics', 'Skin care clinics', 'Beauty salons', 'Gyms', 'Hotels', 'Bakeries', 'Pharmacies', 'Schools', 'Law firms', 'Accountants', 'Electronics stores', 'Furniture stores', 'Jewelry stores']
 
 const STATUS: Record<string, [string, string]> = {
@@ -53,7 +54,6 @@ interface Live {
 
 export function MapsPage() {
   const [keyword, setKeyword] = useState('')
-  const [location, setLocation] = useState('')
   const [category, setCategory] = useState('')
   const [type, setType] = useState<BusinessType>('all')
   const { data: bgInit } = useQuery<Bg>('maps:bgStatus', [])
@@ -101,7 +101,7 @@ export function MapsPage() {
   const activeFilters = Object.values(filters).filter(Boolean).length
 
   const start = () =>
-    run('start', () => rpc('maps:start', { keyword, location, category, businessType: type, findEmails })).then((r: any) => {
+    run('start', () => rpc('maps:start', { keyword, location: '', category, businessType: type, findEmails })).then((r: any) => {
       if (r) {
         setLive({ searchId: r.searchId, state: 'running', message: 'Starting…', processed: 0, saved: 0, duplicates: 0, skipped: 0, emails: 0 })
         setSort({ key: 'id', dir: 'desc' })
@@ -161,40 +161,72 @@ export function MapsPage() {
 
         {/* ---------------- search area ---------------- */}
         <form
-          className="card"
-          style={{ padding: 14 }}
+          className={`hs ${running ? 'is-running' : ''}`}
           onSubmit={(e) => {
             e.preventDefault()
             if (!running) void start()
           }}
         >
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px,1.4fr) minmax(150px,1fr) minmax(150px,1fr) auto auto', gap: 10, alignItems: 'end' }}>
-            <Labeled label="Business keyword">
-              <Input autoFocus value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="e.g. Shoes shop, Restaurants, Garments" icon={<Search size={14} />} disabled={running} />
-            </Labeled>
-            <Labeled label="Location">
-              <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="City, area or country" icon={<MapPin size={14} />} disabled={running} />
-            </Labeled>
-            <Labeled label="Category">
-              <Input list="maps-categories" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Select or type" icon={<Tag size={14} />} disabled={running} />
-              <datalist id="maps-categories">{[...new Set([...CATEGORIES, ...(foundCategories ?? [])])].map((c) => <option key={c} value={c} />)}</datalist>
-            </Labeled>
-            <Labeled label="Business type">
-              <Segmented<BusinessType> value={type} onChange={(v) => !running && setType(v)} options={[{ value: 'all', label: 'All Businesses' }, { value: 'with', label: 'With Website' }, { value: 'without', label: 'Without Website' }]} />
-            </Labeled>
+          <div className="hs-bar">
+            <span className="hs-icon">
+              <Search size={18} strokeWidth={2.3} />
+            </span>
+            <input
+              className="hs-input"
+              autoFocus
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              placeholder="Search businesses — e.g. Shoe shops in Lahore"
+              disabled={running}
+              aria-label="Business keyword and place"
+            />
+            <label className="hs-pill" title="Category">
+              <Tag size={14} />
+              <span className="truncate">{category || 'Any category'}</span>
+              <ChevronDown size={13} className="hs-pill-chev" />
+              <select value={category} onChange={(e) => setCategory(e.target.value)} disabled={running} aria-label="Category">
+                <option value="">Any category</option>
+                {[...new Set([...CATEGORIES, ...(foundCategories ?? [])])].sort().map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </label>
+            <label className="hs-pill" title="Business type">
+              <Globe size={14} />
+              <span className="truncate">{type === 'all' ? 'All businesses' : type === 'with' ? 'With website' : 'Without website'}</span>
+              <ChevronDown size={13} className="hs-pill-chev" />
+              <select value={type} onChange={(e) => setType(e.target.value as BusinessType)} disabled={running} aria-label="Business type">
+                <option value="all">All businesses</option>
+                <option value="with">With website</option>
+                <option value="without">Without website</option>
+              </select>
+            </label>
             {running ? (
-              <Button type="button" variant="danger" className="solid" size="lg" icon={<Square size={14} />} onClick={() => run('stop', () => rpc('maps:stop'))}>Stop</Button>
+              <button type="button" className="hs-go stop" onClick={() => run('stop', () => rpc('maps:stop'))}>
+                <Square size={13} fill="currentColor" /> Stop
+              </button>
             ) : (
-              <Button type="submit" variant="primary" size="lg" icon={<Search size={15} />} loading={busy === 'start'} disabled={!keyword.trim() && !category.trim()}>Search</Button>
+              <button type="submit" className="hs-go" disabled={busy === 'start' || (!keyword.trim() && !category)}>
+                {busy === 'start' ? <Loader2 size={16} style={{ animation: 'spin .8s linear infinite' }} /> : <Search size={16} strokeWidth={2.5} />}
+                Search
+              </button>
             )}
           </div>
-          <div className="row mt-8" style={{ minHeight: 26 }}>
-            <Checkbox checked={findEmails} onChange={(v) => setFindEmails(v)} label={<span style={{ fontSize: 12.5 }}>Find emails from business websites</span>} />
-            <span className="faint truncate" style={{ fontSize: 12 }} title="Choose “With Website” to get mostly businesses with emails.">· only businesses with a website can have an email</span>
+          <div className="hs-foot">
+            <span className="faint">Popular</span>
+            {POPULAR.map((p) => (
+              <button type="button" key={p} className="hs-chip" disabled={running} onClick={() => setKeyword(p + (keyword.match(/ in .+$/i)?.[0] ?? ''))}>
+                {p}
+              </button>
+            ))}
             <div className="grow" />
-            <span className="faint" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>Chrome opens for the search — keep it open</span>
+            <Checkbox checked={findEmails} onChange={(v) => setFindEmails(v)} label={<span title="Only businesses with a website can have an email">Find emails from websites</span>} />
           </div>
-          {live && <Progress live={live} />}
+          {live && (
+            <div className="hs-progress">
+              <Progress live={live} />
+            </div>
+          )}
         </form>
 
         {/* ---------------- toolbar ---------------- */}
@@ -243,7 +275,7 @@ export function MapsPage() {
               activeFilters ? (
                 <EmptyState title="No businesses match these filters" action={<Button onClick={() => setFilters(NO_FILTERS)}>Clear filters</Button>} />
               ) : (
-                <EmptyState icon={<MapPin size={22} />} title="No businesses yet" desc="Enter a keyword and location above and click Search. Businesses appear here as they are found." />
+                <EmptyState icon={<MapPin size={22} />} title="No businesses yet" desc="Type what and where — e.g. “Shoe shops in Lahore” — and click Search. Businesses appear here as they are found." />
               )
             }
           />
@@ -317,15 +349,6 @@ function BackgroundNote({ bg }: { bg: Bg | null }) {
   )
 }
 
-function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="field" style={{ gap: 5 }}>
-      <label style={{ fontSize: 12 }}>{label}</label>
-      {children}
-    </div>
-  )
-}
-
 function Progress({ live }: { live: Live }) {
   const icon =
     live.state === 'running' ? <Loader2 size={15} style={{ animation: 'spin .8s linear infinite' }} color="var(--accent)" />
@@ -334,7 +357,7 @@ function Progress({ live }: { live: Live }) {
     : live.state === 'error' ? <XCircle size={15} color="var(--red)" />
     : <Square size={13} color="var(--text-3)" />
   return (
-    <div className="mt-8" style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+    <div>
       <div className="row" style={{ fontSize: 13, background: live.state === 'paused' ? 'var(--amber-soft)' : undefined, borderRadius: 8, padding: live.state === 'paused' ? '8px 10px' : 0 }}>
         {icon}
         <span className="grow" style={{ fontWeight: live.state === 'running' ? 400 : 550 }}>{live.message}</span>

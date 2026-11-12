@@ -128,6 +128,10 @@ export async function runMapsLayoutCapture(dir: string): Promise<void> {
   await new Promise((r) => setTimeout(r, 3500))
   await win.webContents.insertCSS('*,*::before,*::after{animation:none!important;transition:none!important}')
   writeFileSync(join(dir, 'maps-layout.png'), (await win.webContents.capturePage()).toPNG())
+  await win.webContents.executeJavaScript(`window.lge.invoke('settings:update', { appearance: { theme: 'light', sidebarCollapsed: false } }).then(() => location.reload()); true`)
+  await new Promise((r) => setTimeout(r, 3500))
+  await win.webContents.insertCSS('*,*::before,*::after{animation:none!important;transition:none!important}')
+  writeFileSync(join(dir, 'maps-layout-light.png'), (await win.webContents.capturePage()).toPNG())
   // Show the verification ring mid-round (7 of 20) to check its look.
   const { bus } = await import('./core/events')
   const { backgroundStatus } = await import('./services/maps/background')
