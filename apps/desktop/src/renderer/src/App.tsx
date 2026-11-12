@@ -11,7 +11,6 @@ import { MapsPage } from './pages/discovery/Maps'
 import { LinkedInPage } from './pages/discovery/LinkedIn'
 import { ApolloPage } from './pages/discovery/Apollo'
 import { VerificationPage } from './pages/Verification'
-import { LeadsPage } from './pages/leads/Leads'
 import { AgentPage } from './pages/agent/Agent'
 import { WhatsAppCampaignsPage, EmailCampaignsPage } from './pages/outreach/Campaigns'
 import { EmailAccountsPage } from './pages/outreach/EmailAccounts'
@@ -24,7 +23,6 @@ const PAGES: Record<PageId, () => ReactElement | null> = {
   linkedin: LinkedInPage,
   apollo: ApolloPage,
   verification: VerificationPage,
-  leads: LeadsPage,
   agent: AgentPage,
   'wa-campaigns': WhatsAppCampaignsPage,
   'email-accounts': EmailAccountsPage,

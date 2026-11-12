@@ -14,6 +14,7 @@ import * as agent from './services/ai/agent'
 import * as convs from './services/conversations'
 import * as wa from './services/whatsapp'
 import * as email from './services/email'
+import { addEmailAccount } from './services/emailAutoConfig'
 import * as campaigns from './services/campaigns'
 import * as analytics from './services/analytics'
 import * as gmaps from './services/maps'
@@ -255,6 +256,12 @@ const handlers: Record<string, Handler> = {
   // ------------------------------------------------------------ SMTP
   'smtp:list': () => email.listSmtpAccounts(),
   'smtp:create': (a) => email.createSmtpAccount(a),
+  'smtp:add': async (input: { email: string; password: string; host?: string; port?: number; id?: number }) => {
+    const r = await addEmailAccount(input)
+    email.forgetTransport(r.id)
+    logActivity('user', 'smtp_account_added', 'smtp', r.id)
+    return r
+  },
   'smtp:update': (id: number, a) => email.updateSmtpAccount(id, a),
   'smtp:delete': (id: number) => email.deleteSmtpAccount(id),
   'smtp:test': (id: number) => email.testSmtp(id),

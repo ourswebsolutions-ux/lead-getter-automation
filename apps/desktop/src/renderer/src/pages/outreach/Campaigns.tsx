@@ -375,7 +375,6 @@ function CampaignDetail({ id, channel, onBack, onEdit }: { id: number; channel: 
             <div className="toolbar">
               <Select value={status} onChange={(v) => { setStatus(v); setOffset(0) }} placeholder="All statuses" options={['queued', 'sent', 'replied', 'completed', 'failed', 'skipped', 'stopped'].map((x) => ({ value: x, label: x[0].toUpperCase() + x.slice(1) }))} className="" />
               <div className="grow" />
-              <Button icon={<Users size={14} />} onClick={() => go('leads')}>Add leads from Leads Management</Button>
             </div>
             <DataTable
               loading={loading}

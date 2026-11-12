@@ -13,7 +13,7 @@ export function DiscoveryLayout({ title, desc, eyebrow = 'Discovery', form, jobT
   return (
     <div className="page">
       <div className="page-inner">
-        <PageHeader eyebrow={eyebrow} title={title} desc={desc} actions={<Button icon={<ArrowRight size={14} />} onClick={() => go('leads', { source })}>View leads</Button>} />
+        <PageHeader eyebrow={eyebrow} title={title} desc={desc}  />
         <div className="grid-2" style={{ gridTemplateColumns: 'minmax(0, 1.05fr) minmax(0, 1fr)', alignItems: 'start' }}>
           <div className="col gap-16">{form}</div>
           <div className="col gap-16">

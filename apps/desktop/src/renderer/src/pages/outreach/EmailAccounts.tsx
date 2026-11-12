@@ -1,138 +1,194 @@
-import { useEffect, useState } from 'react'
-import { Plus, AtSign, Send, Pencil, Trash2, Inbox, ShieldCheck } from 'lucide-react'
+import { useState } from 'react'
+import { Plus, Mail, Send, Trash2, KeyRound, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { rpc, useAction, useQuery } from '../../lib/rpc'
-import { fmtRelative } from '../../lib/format'
-import { Button, Card, EmptyState, Field, Input, Modal, PageHeader, Select, StatusPill, Callout, confirmDialog, Segmented, Textarea } from '../../components/ui'
+import { Button, Card, EmptyState, Field, Input, Modal, PageHeader, StatusPill, Textarea, confirmDialog } from '../../components/ui'
 
-const PRESETS: Record<string, any> = {
-  custom: {},
-  gmail: { host: 'smtp.gmail.com', port: 587, secure: 'starttls', imap_host: 'imap.gmail.com', imap_port: 993, hint: 'Use a Google App Password (requires 2-Step Verification).' },
-  outlook: { host: 'smtp.office365.com', port: 587, secure: 'starttls', imap_host: 'outlook.office365.com', imap_port: 993, hint: 'Microsoft 365 must allow SMTP AUTH for this mailbox.' },
-  zoho: { host: 'smtp.zoho.com', port: 465, secure: 'ssl', imap_host: 'imap.zoho.com', imap_port: 993, hint: 'Use an application-specific password if 2FA is on.' },
-  hostinger: { host: 'smtp.hostinger.com', port: 465, secure: 'ssl', imap_host: 'imap.hostinger.com', imap_port: 993 }
-}
-const EMPTY = { name: '', host: '', port: 587, secure: 'starttls', username: '', password: '', from_name: '', from_email: '', reply_to: '', imap_host: '', imap_port: 993, imap_secure: true, daily_limit: 100 }
-
+/** Email accounts: just the address and password — the server settings are found automatically. */
 export function EmailAccountsPage() {
-  const { data: accounts, loading, reload } = useQuery<any[]>('smtp:list', [])
-  const [edit, setEdit] = useState<any>(null)
+  const { data: accounts, reload } = useQuery<any[]>('smtp:list', [])
   const [testFor, setTestFor] = useState<any>(null)
-  const { busy, run } = useAction()
+  const [pwFor, setPwFor] = useState<any>(null)
+  const { run } = useAction()
   return (
     <div className="page">
-      <div className="page-inner">
-        <PageHeader eyebrow="Outreach" title="Email Accounts" desc="Connect SMTP mailboxes for campaigns. Add IMAP to track replies and bounces automatically." actions={<Button variant="primary" icon={<Plus size={14} />} onClick={() => setEdit({ ...EMPTY })}>Add account</Button>} />
-        <Card tight>
-          {loading && !accounts ? <div style={{ padding: 18 }}><div className="skel" style={{ height: 40 }} /></div> : !accounts?.length ? (
-            <EmptyState icon={<AtSign size={22} />} title="No email accounts" desc="Add Gmail/Workspace, Microsoft 365, Zoho or any SMTP server." action={<Button variant="primary" icon={<Plus size={14} />} onClick={() => setEdit({ ...EMPTY })}>Add account</Button>} />
-          ) : (
-            <table className="tbl">
-              <thead><tr><th>Account</th><th>Sender</th><th>Server</th><th>Replies</th><th>Sent today</th><th>Status</th><th style={{ width: 230 }} /></tr></thead>
-              <tbody>
-                {accounts.map((a) => (
-                  <tr key={a.id}>
-                    <td><div className="primary-cell">{a.name}</div><div className="sub-cell">{a.enabled ? 'Enabled' : 'Disabled'}</div></td>
-                    <td><div>{a.from_name}</div><div className="sub-cell">{a.from_email}</div></td>
-                    <td className="mono">{a.host}:{a.port}</td>
-                    <td>{a.imap_host ? <span className="row gap-4"><Inbox size={13} /> IMAP</span> : <span className="faint">Not tracked</span>}</td>
-                    <td className="num">{a.sent_today} / {a.daily_limit}</td>
-                    <td><StatusPill status={a.status} />{a.last_error && <div className="sub-cell truncate" style={{ maxWidth: 220, color: 'var(--red)' }} title={a.last_error}>{a.last_error}</div>}{a.last_tested_at && !a.last_error && <div className="sub-cell">tested {fmtRelative(a.last_tested_at)}</div>}</td>
-                    <td>
-                      <div className="row gap-4" style={{ justifyContent: 'flex-end' }}>
-                        <Button size="sm" icon={<ShieldCheck size={13} />} loading={busy === `t${a.id}`} onClick={() => run(`t${a.id}`, async () => { const r: any = await rpc('smtp:test', a.id); if (!r.ok) throw new Error(r.message); return r }, { success: (r: any) => r.message }).then(reload)}>Test</Button>
-                        <Button size="sm" icon={<Send size={13} />} onClick={() => setTestFor(a)}>Send test</Button>
-                        <Button size="sm" variant="ghost" iconOnly icon={<Pencil size={13} />} onClick={() => setEdit({ ...a, password: '', reply_to: a.reply_to ?? '', imap_host: a.imap_host ?? '', imap_port: a.imap_port ?? 993, imap_secure: !!a.imap_secure, enabled: !!a.enabled })} />
-                        <Button size="sm" variant="ghost" iconOnly icon={<Trash2 size={13} />} onClick={async () => { if (await confirmDialog({ title: `Delete ${a.name}?`, body: 'Campaigns using it will skip this account.', confirm: 'Delete', danger: true })) run('d', () => rpc('smtp:delete', a.id)).then(reload) }} />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </Card>
-        <div className="grid-2 mt-16">
-          <Card title="Deliverability checklist">
-            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8 }} className="muted">
-              <li>Publish <b>SPF</b>, <b>DKIM</b> and <b>DMARC</b> records for your sending domain.</li>
-              <li>Prefer a dedicated outreach domain and warm it up for 2–4 weeks.</li>
-              <li>Keep daily volume modest (30–100 per mailbox) and only email verified addresses.</li>
-              <li>Every email includes an opt-out line and a List-Unsubscribe header; opt-outs and bounces are suppressed automatically.</li>
-              <li>Comply with CAN-SPAM, GDPR/PECR and local rules for B2B outreach.</li>
-            </ul>
+      <div className="page-inner" style={{ maxWidth: 860 }}>
+        <PageHeader title="Email Accounts" desc="Add the email you send campaigns from. Just your email and password — the rest is set up automatically." />
+        <AddAccount onAdded={reload} />
+        <div className="mt-24">
+          <Card tight>
+            {!accounts?.length ? (
+              <EmptyState icon={<Mail size={22} />} title="No email accounts yet" desc="Add one above to start sending email campaigns." />
+            ) : (
+              accounts.map((a) => (
+                <div key={a.id} className="list-row" style={{ padding: '14px 18px' }}>
+                  <span className="provider-logo" style={{ width: 34, height: 34 }}>
+                    <Mail size={15} />
+                  </span>
+                  <div className="grow" style={{ minWidth: 0 }}>
+                    <div className="truncate" style={{ fontWeight: 600 }}>{a.from_email}</div>
+                    <div className="faint truncate" style={{ fontSize: 12 }}>
+                      {a.host}:{a.port} · {a.sent_today}/{a.daily_limit} sent today
+                      {a.status === 'error' && a.last_error ? <span style={{ color: 'var(--red)' }}> · {a.last_error}</span> : null}
+                    </div>
+                  </div>
+                  <StatusPill status={a.status} label={a.status === 'ok' ? 'Working' : undefined} />
+                  <Button size="sm" variant="ghost" icon={<Send size={13} />} onClick={() => setTestFor(a)}>Test</Button>
+                  <Button size="sm" variant="ghost" iconOnly icon={<KeyRound size={13} />} title="Change password" onClick={() => setPwFor(a)} />
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    iconOnly
+                    icon={<Trash2 size={13} />}
+                    title="Remove"
+                    onClick={async () => {
+                      if (await confirmDialog({ title: `Remove ${a.from_email}?`, body: 'Campaigns using it will stop sending from this account.', confirm: 'Remove', danger: true }))
+                        run('d', () => rpc('smtp:delete', a.id), { success: 'Account removed' }).then(reload)
+                    }}
+                  />
+                </div>
+              ))
+            )}
           </Card>
-          <Callout>
-            <b>About tracking:</b> SMTP itself cannot reliably tell whether an email was opened, so this app does not report opens. Replies and bounces are detected through IMAP when configured.
-          </Callout>
         </div>
       </div>
-      {edit && <AccountModal value={edit} onClose={() => setEdit(null)} onSaved={reload} />}
       {testFor && <TestModal account={testFor} onClose={() => setTestFor(null)} />}
+      {pwFor && <PasswordModal account={pwFor} onClose={() => setPwFor(null)} onSaved={reload} />}
     </div>
   )
 }
 
-function AccountModal({ value, onClose, onSaved }: { value: any; onClose: () => void; onSaved: () => void }) {
-  const [f, setF] = useState<any>(value)
-  const [preset, setPreset] = useState('custom')
+function AddAccount({ onAdded }: { onAdded: () => void }) {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [advanced, setAdvanced] = useState(false)
+  const [host, setHost] = useState('')
+  const [port, setPort] = useState('')
   const { busy, run } = useAction()
-  useEffect(() => {
-    const p = PRESETS[preset]
-    if (preset !== 'custom') setF((x: any) => ({ ...x, ...p, hint: undefined }))
-  }, [preset])
-  const bind = (k: string, num = false) => ({ value: f[k] ?? '', onChange: (e: any) => setF({ ...f, [k]: num ? Number(e.target.value) : e.target.value }) })
-  const save = async () => {
-    const body = { ...f, imap_host: f.imap_host || null, imap_port: f.imap_host ? f.imap_port : null, reply_to: f.reply_to || null }
-    const id = await run('s', async () => (f.id ? (await rpc('smtp:update', f.id, body), f.id) : await rpc<number>('smtp:create', body)))
-    if (!id) return
-    setF((x: any) => ({ ...x, id, password: '' }))
-    onSaved()
-    const t = await run('s', async () => {
-      const r: any = await rpc('smtp:test', id)
-      if (!r.ok) throw new Error(r.message)
-      return r
-    }, { success: (r: any) => r.message, error: 'Saved, but the connection test failed' })
-    if (t) onClose()
-  }
+  const isGmail = /@(gmail|googlemail)\.com$/i.test(email.trim())
+  const add = () =>
+    run('add', () => rpc('smtp:add', { email, password, host: advanced ? host : undefined, port: advanced && port ? Number(port) : undefined }), {
+      success: (r: any) => `Email added — connected via ${r.provider ?? r.host}`,
+      error: 'Could not add the email'
+    }).then((r) => {
+      if (r) {
+        setEmail('')
+        setPassword('')
+        setHost('')
+        setPort('')
+        onAdded()
+      }
+    })
   return (
-    <Modal open onClose={onClose} size="wide" title={f.id ? `Edit ${f.name}` : 'Add email account'} desc="Credentials are encrypted with your operating system keychain. The connection is tested on save."
-      footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" loading={busy === 's'} onClick={save}>Save & test</Button></>}>
-      <div className="col gap-16">
-        {!f.id && <Segmented value={preset} onChange={setPreset} options={[{ value: 'custom', label: 'Custom' }, { value: 'gmail', label: 'Gmail / Workspace' }, { value: 'outlook', label: 'Microsoft 365' }, { value: 'zoho', label: 'Zoho' }, { value: 'hostinger', label: 'Hostinger' }]} />}
-        {PRESETS[preset]?.hint && <Callout>{PRESETS[preset].hint}</Callout>}
-        <div className="grid-3" style={{ gap: 12 }}>
-          <Field label="Account name"><Input {...bind('name')} placeholder="Sales mailbox" /></Field>
-          <Field label="Sender name"><Input {...bind('from_name')} /></Field>
-          <Field label="Sender email"><Input {...bind('from_email')} /></Field>
-          <Field label="SMTP host"><Input {...bind('host')} /></Field>
-          <Field label="Port"><Input type="number" {...bind('port', true)} /></Field>
-          <Field label="Encryption"><Select value={f.secure} onChange={(v) => setF({ ...f, secure: v })} options={[{ value: 'starttls', label: 'STARTTLS (587)' }, { value: 'ssl', label: 'SSL/TLS (465)' }, { value: 'none', label: 'None (not recommended)' }]} /></Field>
-          <Field label="Username"><Input {...bind('username')} /></Field>
-          <Field label="Password / app password" hint={f.id ? 'Leave blank to keep the current password' : undefined}><Input type="password" {...bind('password')} /></Field>
-          <Field label="Reply-to" hint="Optional"><Input {...bind('reply_to')} /></Field>
+    <Card>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          void add()
+        }}
+      >
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+          <Field label="Email">
+            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" autoComplete="off" />
+          </Field>
+          <Field label="Password or app password">
+            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" autoComplete="new-password" />
+          </Field>
+          <Button type="submit" variant="primary" icon={busy === 'add' ? undefined : <Plus size={14} />} loading={busy === 'add'} disabled={!email.includes('@') || !password}>
+            {busy === 'add' ? 'Connecting…' : 'Add account'}
+          </Button>
         </div>
-        <div className="section-title" style={{ margin: 0 }}>Reply & bounce tracking (IMAP, optional)</div>
-        <div className="grid-3" style={{ gap: 12 }}>
-          <Field label="IMAP host"><Input {...bind('imap_host')} placeholder="imap.example.com" /></Field>
-          <Field label="IMAP port"><Input type="number" {...bind('imap_port', true)} /></Field>
-          <Field label="Daily sending limit"><Input type="number" {...bind('daily_limit', true)} /></Field>
+        {advanced && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: 10, marginTop: 12 }}>
+            <Field label="SMTP server">
+              <Input value={host} onChange={(e) => setHost(e.target.value)} placeholder="smtp.yourdomain.com" />
+            </Field>
+            <Field label="Port">
+              <Input type="number" value={port} onChange={(e) => setPort(e.target.value)} placeholder="465" />
+            </Field>
+          </div>
+        )}
+        <div className="row mt-8" style={{ fontSize: 12 }}>
+          <span className="faint grow">
+            {busy === 'add' ? (
+              <span className="row gap-4"><Loader2 size={12} style={{ animation: 'spin .8s linear infinite' }} /> Finding your mail server and checking the login…</span>
+            ) : isGmail ? (
+              'Gmail needs an App Password: Google Account → Security → 2-Step Verification → App passwords.'
+            ) : (
+              'Server settings are detected automatically for Gmail, Outlook, Yahoo, Zoho, GoDaddy, Hostinger and most business email.'
+            )}
+          </span>
+          <a style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }} onClick={() => setAdvanced((v) => !v)}>
+            Advanced {advanced ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </a>
         </div>
-      </div>
+      </form>
+    </Card>
+  )
+}
+
+function PasswordModal({ account, onClose, onSaved }: { account: any; onClose: () => void; onSaved: () => void }) {
+  const [password, setPassword] = useState('')
+  const { busy, run } = useAction()
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Change password"
+      desc={account.from_email}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button
+            variant="primary"
+            loading={!!busy}
+            disabled={!password}
+            onClick={() =>
+              run('p', () => rpc('smtp:add', { id: account.id, email: account.from_email, password, host: account.host, port: account.port }), { success: 'Password updated' }).then((r) => {
+                if (r) {
+                  onSaved()
+                  onClose()
+                }
+              })
+            }
+          >
+            Save
+          </Button>
+        </>
+      }
+    >
+      <Field label="New password or app password">
+        <Input autoFocus type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+      </Field>
     </Modal>
   )
 }
 
 function TestModal({ account, onClose }: { account: any; onClose: () => void }) {
   const [to, setTo] = useState('')
-  const [subject, setSubject] = useState('Test from Lead Getter Enterprise')
-  const [body, setBody] = useState('Hello,\n\nThis is a test message to confirm the mailbox is configured correctly.\n')
+  const [body, setBody] = useState('Hello,\n\nThis is a test message to confirm the email account works.\n')
   const { busy, run } = useAction()
   return (
-    <Modal open onClose={onClose} title={`Send a test from ${account.from_email}`} footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" loading={!!busy} disabled={!to.includes('@')} onClick={() => run('s', () => rpc('smtp:sendTest', account.id, to, subject, body, false), { success: 'Test email sent' }).then(onClose)}>Send</Button></>}>
+    <Modal
+      open
+      onClose={onClose}
+      title="Send a test email"
+      desc={`From ${account.from_email}`}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" loading={!!busy} disabled={!to.includes('@')} onClick={() => run('s', () => rpc('smtp:sendTest', account.id, to, 'Test email', body, false), { success: 'Test email sent' }).then((r) => r !== undefined && onClose())}>
+            Send
+          </Button>
+        </>
+      }
+    >
       <div className="col gap-12">
-        <Field label="To"><Input autoFocus value={to} onChange={(e) => setTo(e.target.value)} placeholder="you@example.com" /></Field>
-        <Field label="Subject"><Input value={subject} onChange={(e) => setSubject(e.target.value)} /></Field>
-        <Field label="Body"><Textarea rows={5} value={body} onChange={(e) => setBody(e.target.value)} /></Field>
+        <Field label="Send to">
+          <Input autoFocus value={to} onChange={(e) => setTo(e.target.value)} placeholder="you@example.com" />
+        </Field>
+        <Field label="Message">
+          <Textarea rows={4} value={body} onChange={(e) => setBody(e.target.value)} />
+        </Field>
       </div>
     </Modal>
   )

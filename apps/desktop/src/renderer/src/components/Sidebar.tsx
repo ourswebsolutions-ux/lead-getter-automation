@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import {
-  LayoutDashboard, MapPin, Briefcase, Rocket, MailCheck, Users, Bot, Send, AtSign, Mails,
+  LayoutDashboard, MapPin, Briefcase, Rocket, MailCheck, Bot, Send, AtSign, Mails,
   MessagesSquare, Settings, Bell, ChevronLeft, ChevronRight, ChevronRight as Chev, Search, RefreshCw
 } from 'lucide-react'
 import { useNav, type PageId } from '../lib/nav'
@@ -34,7 +34,6 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         short: 'Menu',
         items: [
           { id: 'dashboard', label: 'Dashboard', icon: ic(LayoutDashboard) },
-          { id: 'leads', label: 'Leads Management', icon: ic(Users) },
           { id: 'conversations', label: 'Conversations', icon: ic(MessagesSquare), badge: counts?.unread },
           { id: 'agent', label: 'AI Sales Agent', icon: ic(Bot), badge: counts?.pendingApprovals }
         ]

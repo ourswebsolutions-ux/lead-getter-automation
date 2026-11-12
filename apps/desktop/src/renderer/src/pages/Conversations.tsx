@@ -246,7 +246,6 @@ function Workspace({ id }: { id: number }) {
             <StatusPill status={c.interest === 'unknown' ? null : c.interest} label={c.interest === 'unknown' ? 'Interest unknown' : undefined} />
             <StatusPill status={c.status} />
           </div>
-          {c.lead_id && <Button size="sm" variant="ghost" icon={<ExternalLink size={13} />} className="mt-8" onClick={() => go('leads', { open: c.lead_id })}>Open lead</Button>}
         </div>
         <div className="block">
           <h4>AI conversation summary</h4>

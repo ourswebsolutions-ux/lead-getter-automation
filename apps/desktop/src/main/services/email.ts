@@ -84,6 +84,11 @@ export function sentToday(accountId: number): number {
 }
 
 const transporters = new Map<number, Transporter>()
+/** Drops the cached connection after an account's settings change. */
+export function forgetTransport(id: number): void {
+  transporters.get(id)?.close()
+  transporters.delete(id)
+}
 function transporter(id: number): { t: Transporter; acct: any } {
   const acct = db().get<any>('SELECT * FROM smtp_accounts WHERE id = ?', id)
   if (!acct) throw new Error('SMTP account not found')

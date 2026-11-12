@@ -57,7 +57,7 @@ export function Dashboard() {
         )}
 
         <div className="grid-4">
-          <Stat loading={loading} label="Total leads" icon={<Users size={13} />} value={fmtNum(s?.totalLeads)} foot={`+${fmtNum(s?.newLeads)} in this period`} color="var(--chart-1)" onClick={() => go('leads')} />
+          <Stat loading={loading} label="Total leads" icon={<Users size={13} />} value={fmtNum(s?.totalLeads)} foot={`+${fmtNum(s?.newLeads)} in this period`} color="var(--chart-1)" onClick={() => go('maps')} />
           <Stat loading={loading} label="Verified emails" icon={<MailCheck size={13} />} value={fmtNum(s?.verifiedEmails)} foot={`${fmtNum(s?.unverifiedEmails)} awaiting verification`} color="var(--green)" onClick={() => go('verification')} />
           <Stat loading={loading} label="Interested prospects" icon={<Sparkles size={13} />} value={fmtNum(s?.interested)} foot={`${fmtNum(s?.repliesReceived)} replies this period`} color="var(--chart-3)" onClick={() => go('conversations', { folder: 'interested' })} />
           <Stat loading={loading} label="Messages sent" icon={<Send size={13} />} value={fmtNum((s?.whatsappSent ?? 0) + (s?.emailsSent ?? 0))} foot={`${fmtNum(s?.whatsappSent)} WhatsApp · ${fmtNum(s?.emailsSent)} email`} color="var(--chart-2)" />
