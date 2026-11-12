@@ -8,7 +8,7 @@ vi.mock('../src/main/services/maps/emailFinder', async (orig) => ({
 }))
 
 import { EmailVerifier, validSyntax } from '../src/main/services/maps/emailVerify'
-import { runBackgroundOnce, setVerifierForTests, backgroundStatus } from '../src/main/services/maps/background'
+import { runBackgroundOnce, setVerifierForTests, backgroundStatus, queueAllForVerification } from '../src/main/services/maps/background'
 import { updateSettings } from '../src/main/core/settings'
 import { upsertLead, attachEmail } from '../src/main/services/leads'
 import { listResults } from '../src/main/services/maps/session'
@@ -104,6 +104,32 @@ describe('background email finder and verify switch', () => {
     for (let i = 0; i < 3; i++) await runBackgroundOnce()
     const byName = Object.fromEntries((listResults({}).rows as any[]).map((r) => [r.business_name, r.email_status]))
     expect(byName).toEqual({ Shop: 'safe', Catch: 'risky', Ghost: 'invalid' })
+    expect(backgroundStatus().verifyPending).toBe(0)
+  })
+
+  it('verifies ALL unconfirmed emails in the table (old unverified and earlier unknown), several domains in one pass, keeping confirmed ones', async () => {
+    await ready
+    const ids: Record<string, number> = {}
+    const add = (name: string, email: string, status: string) => {
+      const lead = addResult(name, `https://${email.split('@')[1]}`)
+      const e = attachEmail(lead, email)!
+      db().run('UPDATE email_addresses SET verification_status = ? WHERE id = ?', status, e.id)
+      ids[name] = e.id
+    }
+    add('Old1', 'info@one.pk', 'unverified') // found long ago, never verified
+    add('Old2', 'sales@two.pk', 'unknown') // earlier attempt gave no clear answer
+    add('Old3', 'nobody@three.pk', 'failed')
+    add('Old4', 'info@four.pk', 'unverified')
+    add('Done', 'info@five.pk', 'safe') // already confirmed: kept as is
+    db().run("UPDATE email_addresses SET verification_status = 'invalid' WHERE id = ?", ids.Done) // marker to prove it isn't re-checked
+    setVerifierForTests(makeVerifier())
+    updateSettings({ maps: { autoFindEmails: false, verifyEmails: true } })
+    expect(queueAllForVerification()).toBe(2) // unknown + failed re-queued
+    expect(backgroundStatus().verifyPending).toBe(4)
+    await runBackgroundOnce() // one pass handles every domain
+    const st = (n: string) => db().get<any>('SELECT verification_status s FROM email_addresses WHERE id = ?', ids[n]).s
+    expect([st('Old1'), st('Old2'), st('Old3'), st('Old4')]).toEqual(['safe', 'safe', 'invalid', 'safe'])
+    expect(st('Done')).toBe('invalid') // untouched
     expect(backgroundStatus().verifyPending).toBe(0)
   })
 })

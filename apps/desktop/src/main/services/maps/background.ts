@@ -96,43 +96,86 @@ function saveVerification(emailId: number, r: VerifyResult) {
   })
 }
 
-async function verifyOne(): Promise<boolean> {
-  const first = db().get<{ domain: string }>(`SELECT ea.domain ${PENDING_VERIFY} ORDER BY ea.id DESC LIMIT 1`)
-  if (!first) return false
-  const rows = db().all<{ id: number; email: string }>(`SELECT ea.id, ea.email ${PENDING_VERIFY} AND ea.domain = ? LIMIT 10`, first.domain)
+async function verifyDomain(domain: string): Promise<void> {
+  const rows = db().all<{ id: number; email: string }>(`SELECT ea.id, ea.email ${PENDING_VERIFY} AND ea.domain = ? LIMIT 20`, domain)
+  if (!rows.length) return
+  // Mark them so parallel workers don't pick the same domain twice.
+  for (const r of rows) db().run("UPDATE email_addresses SET verification_status = 'queued' WHERE id = ?", r.id)
+  let results = new Map<string, VerifyResult>()
+  try {
+    results = await verifier.checkDomain(domain, rows.map((r) => r.email))
+  } catch (e) {
+    log.warn(`Verification failed for ${domain}`, e)
+  }
+  for (const row of rows) {
+    let r: VerifyResult = results.get(row.email.toLowerCase()) ?? { status: 'unknown', reason: 'no answer' }
+    // This computer cannot reach mail servers (port 25 blocked): use Reacher if one is configured.
+    if (r.status === 'unknown' && verifier.blocked && getSettings().integrations.reacherUrl && Date.now() > reacherDownUntil) {
+      try {
+        const o = await callReacher(row.email)
+        r = { status: o.status === 'safe' ? 'verified' : o.status === 'invalid' ? 'invalid' : o.status === 'risky' ? 'catch_all' : 'unknown', reason: o.reasons.join('; ') }
+      } catch {
+        reacherDownUntil = Date.now() + 10 * 60_000 // not reachable: don't retry for a while
+      }
+    }
+    saveVerification(row.id, r)
+  }
+  bus.publish('maps:result', {})
+  publish()
+}
+
+/** Verifies every unverified email in the Google Maps results (old and new), 3 domains at a time, until none are left. */
+async function verifyAllPending(): Promise<void> {
+  if (verifyingBusy) return
   verifyingBusy = true
   publish()
+  const inFlight = new Set<string>()
   try {
-    const results = await verifier.checkDomain(first.domain, rows.map((r) => r.email))
-    for (const row of rows) {
-      let r = results.get(row.email.toLowerCase()) ?? { status: 'unknown' as const, reason: 'no answer' }
-      // This computer cannot reach mail servers (port 25 blocked): use Reacher if one is configured.
-      if (r.status === 'unknown' && verifier.blocked && getSettings().integrations.reacherUrl && Date.now() > reacherDownUntil) {
-        try {
-          const o = await callReacher(row.email)
-          r = { status: o.status === 'safe' ? 'verified' : o.status === 'invalid' ? 'invalid' : o.status === 'risky' ? 'catch_all' : 'unknown', reason: o.reasons.join('; ') }
-        } catch {
-          reacherDownUntil = Date.now() + 10 * 60_000 // not reachable: don't retry for a while
-        }
-      }
-      saveVerification(row.id, r)
+    for (;;) {
+      if (!getSettings().maps.verifyEmails) break
+      const domains = db()
+        .all<{ domain: string }>(`SELECT ea.domain, MAX(ea.id) last ${PENDING_VERIFY} AND ea.verification_status = 'unverified' GROUP BY ea.domain ORDER BY last DESC LIMIT 3`)
+        .map((d) => d.domain)
+        .filter((d) => !inFlight.has(d))
+      if (!domains.length) break
+      await Promise.all(
+        domains.map(async (d) => {
+          inFlight.add(d)
+          try {
+            await verifyDomain(d)
+          } finally {
+            inFlight.delete(d)
+          }
+        })
+      )
     }
   } finally {
     verifyingBusy = false
+    publish()
   }
-  bus.publish('maps:result', {})
-  return true
 }
 
+/** Email finding and verification run independently, so a slow website never holds up verification. */
 async function tick() {
   const s = getSettings().maps
-  try {
-    if (s.autoFindEmails && !findingBusy) await findOne()
-    if (s.verifyEmails && !verifyingBusy) await verifyOne()
-  } catch (e) {
-    log.warn('Background tick failed', e)
-  }
+  const work: Promise<unknown>[] = []
+  if (s.autoFindEmails && !findingBusy) work.push(findOne().catch((e) => log.warn('Email finder failed', e)))
+  if (s.verifyEmails && !verifyingBusy) work.push(verifyAllPending().catch((e) => log.warn('Verifier failed', e)))
+  await Promise.all(work)
   publish()
+}
+
+/**
+ * Queues every email in the Google Maps results that is not yet confirmed (unverified, or earlier
+ * results that were unknown/failed) for verification. Already confirmed results (exists / risky /
+ * does not exist) are kept.
+ */
+export function queueAllForVerification(): number {
+  return db().run(
+    `UPDATE email_addresses SET verification_status = 'unverified'
+     WHERE verification_status IN ('unknown', 'failed', 'queued')
+       AND EXISTS (SELECT 1 FROM lead_emails le JOIN maps_results r ON r.lead_id = le.lead_id WHERE le.email_id = email_addresses.id)`
+  ).changes
 }
 
 export function startMapsBackground(d: typeof deps): void {
@@ -149,6 +192,8 @@ export function stopMapsBackground(): void {
 export function onSettingsChanged(): void {
   verifier = new EmailVerifier()
   reacherDownUntil = 0
+  // Turning verification on checks every email in the table that isn't confirmed yet, old and new.
+  if (getSettings().maps.verifyEmails) queueAllForVerification()
   void tick()
 }
 

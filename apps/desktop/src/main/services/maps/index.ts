@@ -6,7 +6,7 @@ import { MapsSearch, type SearchInput } from './session'
 
 export * from './session'
 export { backgroundStatus } from './background'
-import { startMapsBackground, stopMapsBackground, onSettingsChanged } from './background'
+import { startMapsBackground, stopMapsBackground, onSettingsChanged, queueAllForVerification } from './background'
 import { updateSettings, getSettings } from '../../core/settings'
 
 /** One Google Maps search at a time, in one shared Chrome window. */
@@ -46,6 +46,7 @@ export function activeSearch() {
 
 /** On startup, searches left 'running' by a crash or quit are marked stopped. */
 export function startBackground() {
+  if (getSettings().maps.verifyEmails) queueAllForVerification()
   startMapsBackground({ activeSearchId: () => current?.search.id ?? null, chrome: () => chrome })
 }
 
