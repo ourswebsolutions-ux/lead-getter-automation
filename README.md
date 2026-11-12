@@ -43,7 +43,7 @@ cd apps/desktop && npm install
 LICENSE_PUBLIC_KEY="$(cd ../license-server && npm run -s print-public-key)" npm run dev
 ```
 
-> In VS Code's integrated terminal `ELECTRON_RUN_AS_NODE=1` may be set; run `unset ELECTRON_RUN_AS_NODE` first or Electron starts as plain Node.
+> `npm run dev` / `npm start` clear `ELECTRON_RUN_AS_NODE` automatically (VS Code terminals set it, which otherwise makes Electron start as plain Node).
 
 Then: issue a license in the admin console → activate it in **License & Subscription** → configure integrations in **Settings** and an AI provider in **AI Sales Agent → AI providers**.
 
