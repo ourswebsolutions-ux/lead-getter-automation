@@ -25,6 +25,8 @@ const MAX_ATTEMPTS = 2
 let timer: NodeJS.Timeout | null = null
 let findingBusy = false
 let verifyingBusy = false
+/** Progress of the current verification round: emails checked so far and the round's total. */
+let round = { done: 0, total: 0 }
 let verifier = new EmailVerifier()
 let reacherDownUntil = 0
 let deps: { activeSearchId: () => number | null; chrome: () => ChromeSession | null } = { activeSearchId: () => null, chrome: () => null }
@@ -50,6 +52,8 @@ export function backgroundStatus() {
     verifyPending: s.verifyEmails ? db().get<{ n: number }>(`SELECT COUNT(*) n ${PENDING_VERIFY}`)!.n : 0,
     finding: findingBusy,
     verifying: verifyingBusy,
+    verifyDone: round.done,
+    verifyTotal: round.total,
     port25Blocked: verifier.blocked
   }
 }
@@ -119,6 +123,7 @@ async function verifyDomain(domain: string): Promise<void> {
       }
     }
     saveVerification(row.id, r)
+    round.done++
   }
   bus.publish('maps:result', {})
   publish()
@@ -127,7 +132,11 @@ async function verifyDomain(domain: string): Promise<void> {
 /** Verifies every unverified email in the Google Maps results (old and new), 3 domains at a time, until none are left. */
 async function verifyAllPending(): Promise<void> {
   if (verifyingBusy) return
+  const pendingNow = () => db().get<{ n: number }>(`SELECT COUNT(*) n ${PENDING_VERIFY}`)!.n
+  const startPending = pendingNow()
+  if (!startPending) return
   verifyingBusy = true
+  round = { done: 0, total: startPending }
   publish()
   const inFlight = new Set<string>()
   try {
@@ -138,6 +147,7 @@ async function verifyAllPending(): Promise<void> {
         .map((d) => d.domain)
         .filter((d) => !inFlight.has(d))
       if (!domains.length) break
+      round.total = Math.max(round.total, round.done + pendingNow())
       await Promise.all(
         domains.map(async (d) => {
           inFlight.add(d)

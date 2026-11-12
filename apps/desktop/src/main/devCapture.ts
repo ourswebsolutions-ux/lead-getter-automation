@@ -128,6 +128,12 @@ export async function runMapsLayoutCapture(dir: string): Promise<void> {
   await new Promise((r) => setTimeout(r, 3500))
   await win.webContents.insertCSS('*,*::before,*::after{animation:none!important;transition:none!important}')
   writeFileSync(join(dir, 'maps-layout.png'), (await win.webContents.capturePage()).toPNG())
+  // Show the verification ring mid-round (7 of 20) to check its look.
+  const { bus } = await import('./core/events')
+  const { backgroundStatus } = await import('./services/maps/background')
+  bus.publish('maps:bg', { ...backgroundStatus(), verifyEmails: true, verifying: true, verifyDone: 7, verifyTotal: 20 })
+  await new Promise((r) => setTimeout(r, 400))
+  writeFileSync(join(dir, 'maps-ring.png'), (await win.webContents.capturePage()).toPNG())
   const m = await win.webContents.executeJavaScript(`(() => { const w = document.querySelector('.scroll-card .table-wrap'); const p = document.querySelector('.page.fill'); return { pageScroll: p.scrollHeight > p.clientHeight, tableScrollsY: w.scrollHeight > w.clientHeight, tableScrollsX: w.scrollWidth > w.clientWidth } })()`)
   writeFileSync(join(dir, 'maps-layout.json'), JSON.stringify(m))
   app.quit()

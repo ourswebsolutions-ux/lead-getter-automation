@@ -131,5 +131,7 @@ describe('background email finder and verify switch', () => {
     expect([st('Old1'), st('Old2'), st('Old3'), st('Old4')]).toEqual(['safe', 'safe', 'invalid', 'safe'])
     expect(st('Done')).toBe('invalid') // untouched
     expect(backgroundStatus().verifyPending).toBe(0)
+    // The progress ring's numbers for this round: 4 of 4 verified.
+    expect(backgroundStatus()).toMatchObject({ verifyDone: 4, verifyTotal: 4, verifying: false })
   })
 })

@@ -35,6 +35,8 @@ interface Bg {
   verifyPending: number
   finding: boolean
   verifying: boolean
+  verifyDone: number
+  verifyTotal: number
   port25Blocked: boolean
 }
 
@@ -201,6 +203,7 @@ export function MapsPage() {
           {selected.size > 0 && <span className="faint" style={{ fontSize: 12.5 }}>· {selected.size} selected <a style={{ cursor: 'pointer' }} onClick={() => setSelected(new Set())}>clear</a></span>}
           <div className="grow" />
           <BackgroundNote bg={bg} />
+          {bg?.verifyEmails && <VerifyProgress bg={bg} />}
           <label className="row" style={{ gap: 8, fontSize: 13, cursor: 'pointer', marginRight: 6 }} title="Checks each email with its mail server: green = exists, yellow = risky, red = does not exist">
             <Switch on={!!bg?.verifyEmails} onChange={setVerify} />
             Verify emails
@@ -259,11 +262,51 @@ export function MapsPage() {
   )
 }
 
+/** Small circular progress for email verification: filled part = verified, spinning tip = still working. */
+function VerifyProgress({ bg }: { bg: Bg }) {
+  const total = bg.verifying ? bg.verifyTotal : bg.verifyPending
+  const done = bg.verifying ? Math.min(bg.verifyDone, total) : 0
+  if (!total) return null
+  const left = Math.max(0, total - done)
+  const pct = total ? done / total : 0
+  const size = 22
+  const stroke = 3
+  const r = (size - stroke) / 2
+  const c = 2 * Math.PI * r
+  return (
+    <span className="row" style={{ gap: 7, fontSize: 12, marginRight: 4 }} title={`${fmtNum(done)} verified · ${fmtNum(left)} left${bg.verifying ? '' : ' (starting…)'}`}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0 }} aria-label={`Verified ${done} of ${total}`}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--border-strong)" strokeWidth={stroke} />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="var(--green)"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={`${c * pct} ${c}`}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          style={{ transition: 'stroke-dasharray .4s ease' }}
+        />
+        {bg.verifying && (
+          <g style={{ transformOrigin: '50% 50%', animation: 'spin 1.1s linear infinite' }}>
+            <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--text-2)" strokeWidth={stroke} strokeLinecap="round" strokeDasharray={`${c * 0.12} ${c}`} opacity={0.55} />
+          </g>
+        )}
+      </svg>
+      <span className="num" style={{ whiteSpace: 'nowrap' }}>
+        <b style={{ fontWeight: 600 }}>{fmtNum(done)}</b>
+        <span className="faint"> / {fmtNum(total)}</span>
+      </span>
+    </span>
+  )
+}
+
 function BackgroundNote({ bg }: { bg: Bg | null }) {
   if (!bg) return null
   const parts: string[] = []
   if (bg.autoFindEmails && bg.emailsPending) parts.push(`Finding emails on ${fmtNum(bg.emailsPending)} website${bg.emailsPending === 1 ? '' : 's'}`)
-  if (bg.verifyEmails && bg.verifyPending) parts.push(`Verifying ${fmtNum(bg.verifyPending)} email${bg.verifyPending === 1 ? '' : 's'}`)
   if (bg.verifyEmails && bg.port25Blocked) parts.push('mail servers unreachable from this network (port 25)')
   if (!parts.length) return null
   return (
