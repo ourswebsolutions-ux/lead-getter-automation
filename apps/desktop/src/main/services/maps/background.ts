@@ -4,7 +4,7 @@ import { logger } from '../../core/logger'
 import { getSettings } from '../../core/settings'
 import { attachEmail } from '../leads'
 import { callReacher } from '../verification'
-import { findSiteEmails } from './emailFinder'
+import { findSiteEmails, hostOf } from './emailFinder'
 import { isPlausibleEmail } from '../sources/website'
 import { EmailVerifier, toAppStatus, type VerifyResult } from './emailVerify'
 import { getResultByKey } from './session'
@@ -101,11 +101,38 @@ function saveVerification(emailId: number, r: VerifyResult) {
   })
 }
 
+/** True when the email's domain is the website domain of a business it belongs to. */
+function isOwnBusinessEmail(emailId: number, domain: string): boolean {
+  const sites = db().all<{ website: string | null }>(
+    'SELECT l.website FROM lead_emails le JOIN leads l ON l.id = le.lead_id WHERE le.email_id = ?',
+    emailId
+  )
+  const d = domain.toLowerCase().replace(/^www\./, '')
+  return sites.some(({ website }) => {
+    const h = hostOf(website ?? '')
+    return !!h && (h === d || h.endsWith(`.${d}`) || d.endsWith(`.${h}`))
+  })
+}
+
 async function verifyDomain(domain: string): Promise<void> {
   const rows = db().all<{ id: number; email: string }>(`SELECT ea.id, ea.email ${PENDING_VERIFY} AND ea.domain = ? LIMIT 20`, domain)
   if (!rows.length) return
   // Mark them so parallel workers don't pick the same domain twice.
   for (const r of rows) db().run("UPDATE email_addresses SET verification_status = 'queued' WHERE id = ?", r.id)
+  // A business email on the business's own website domain (care@stylo.pk on stylo.pk) is the
+  // business's own published address: always green, no mail-server check needed.
+  const own = rows.filter((r) => isOwnBusinessEmail(r.id, domain))
+  for (const r of own) {
+    saveVerification(r.id, { status: 'verified', reason: `business email: published by the business on its own website (${domain})` })
+    round.done++
+  }
+  const others = rows.filter((r) => !own.includes(r))
+  if (!others.length) {
+    bus.publish('maps:result', {})
+    publish()
+    return
+  }
+  rows.splice(0, rows.length, ...others)
   let results = new Map<string, VerifyResult>()
   try {
     results = await verifier.checkDomain(domain, rows.map((r) => r.email))
@@ -183,11 +210,23 @@ async function tick() {
  * does not exist) are kept.
  */
 export function queueAllForVerification(): number {
-  return db().run(
+  let n = db().run(
     `UPDATE email_addresses SET verification_status = 'unverified'
      WHERE verification_status IN ('unknown', 'failed', 'queued')
        AND EXISTS (SELECT 1 FROM lead_emails le JOIN maps_results r ON r.lead_id = le.lead_id WHERE le.email_id = email_addresses.id)`
   ).changes
+  // Business emails on the business's own domain are always green: re-queue any marked otherwise earlier.
+  const marked = db().all<{ id: number; domain: string }>(
+    `SELECT DISTINCT ea.id, ea.domain FROM email_addresses ea JOIN lead_emails le ON le.email_id = ea.id JOIN maps_results r ON r.lead_id = le.lead_id
+     WHERE ea.verification_status IN ('invalid', 'risky')`
+  )
+  for (const e of marked)
+    if (isOwnBusinessEmail(e.id, e.domain)) {
+      db().run("UPDATE email_addresses SET verification_status = 'unverified' WHERE id = ?", e.id)
+      db().run("DELETE FROM suppression_list WHERE channel = 'email' AND address = (SELECT email FROM email_addresses WHERE id = ?)", e.id)
+      n++
+    }
+  return n
 }
 
 /**

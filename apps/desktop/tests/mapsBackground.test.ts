@@ -107,9 +107,10 @@ describe('background email finder and verify switch', () => {
 
   it('verify switch colours: safe (exists), risky (catch-all), invalid (does not exist)', async () => {
     await ready
-    const a = addResult('Shop', 'https://shop.pk')
-    const b = addResult('Catch', 'https://catchall.pk')
-    const c = addResult('Ghost', 'https://ghost.pk')
+    // Websites on other domains, so the mail-server check decides the colour.
+    const a = addResult('Shop', 'https://shop-site.com')
+    const b = addResult('Catch', 'https://catch-site.com')
+    const c = addResult('Ghost', 'https://ghost-site.com')
     attachEmail(a, 'info@shop.pk')
     attachEmail(b, 'hello@catchall.pk')
     attachEmail(c, 'ghost@shop.pk')
@@ -125,7 +126,7 @@ describe('background email finder and verify switch', () => {
     await ready
     const ids: Record<string, number> = {}
     const add = (name: string, email: string, status: string) => {
-      const lead = addResult(name, `https://${email.split('@')[1]}`)
+      const lead = addResult(name, `https://site-${name.toLowerCase()}.com`) // not the email's domain → mail-server check
       const e = attachEmail(lead, email)!
       db().run('UPDATE email_addresses SET verification_status = ? WHERE id = ?', status, e.id)
       ids[name] = e.id
@@ -158,5 +159,29 @@ describe('background email finder and verify switch', () => {
     attachEmail(lead, 'info@junk.pk')
     expect(cleanupJunkEmails()).toBe(1)
     expect((listResults({}).rows[0] as any).email).toBe('info@junk.pk')
+  })
+
+  it('business emails on the business’s own website domain are always green, without a mail-server check', async () => {
+    const lead = addResult('Stylo', 'https://www.stylo.pk')
+    attachEmail(lead, 'care@stylo.pk') // own domain → green
+    attachEmail(lead, 'ghost@shop.pk') // other domain → checked with its mail server (says: does not exist)
+    const calls: string[] = []
+    const v = makeVerifier()
+    const orig = v.checkDomain.bind(v)
+    v.checkDomain = async (d: string, e: string[]) => (calls.push(d), orig(d, e))
+    setVerifierForTests(v)
+    await ready
+    updateSettings({ maps: { autoFindEmails: false, verifyEmails: true } })
+    await runBackgroundOnce()
+    const st = (e: string) => db().get<any>('SELECT verification_status s FROM email_addresses WHERE email = ?', e).s
+    expect(st('care@stylo.pk')).toBe('safe')
+    expect(st('ghost@shop.pk')).toBe('invalid')
+    expect(calls).toEqual(['shop.pk']) // stylo.pk was never asked
+    expect((listResults({}).rows[0] as any).email_reason).toMatch(/published by the business on its own website/)
+    // An own-domain business email marked red by an older check turns green again.
+    db().run("UPDATE email_addresses SET verification_status = 'invalid' WHERE email = 'care@stylo.pk'")
+    expect(queueAllForVerification()).toBe(1)
+    await runBackgroundOnce()
+    expect(st('care@stylo.pk')).toBe('safe')
   })
 })
