@@ -6,6 +6,7 @@ import { db } from '../../db'
 import { secrets } from '../../security/secrets'
 import { getSettings } from '../../core/settings'
 import { logger } from '../../core/logger'
+import { bus } from '../../core/events'
 import type { ProviderId } from '@shared/settings'
 
 const log = logger('ai')
@@ -40,7 +41,7 @@ export const PROVIDERS: { id: ProviderId; name: string; suggested: string[]; doc
   { id: 'anthropic', name: 'Anthropic Claude', suggested: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'], docs: 'https://console.anthropic.com/settings/keys' },
   { id: 'openai', name: 'OpenAI', suggested: ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4o'], docs: 'https://platform.openai.com/api-keys' },
   { id: 'gemini', name: 'Google Gemini', suggested: ['gemini-2.5-pro', 'gemini-2.5-flash'], docs: 'https://aistudio.google.com/apikey' },
-  { id: 'groq', name: 'Groq', suggested: ['llama-3.3-70b-versatile', 'openai/gpt-oss-120b'], docs: 'https://console.groq.com/keys' }
+  { id: 'groq', name: 'Groq', suggested: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b'], docs: 'https://console.groq.com/keys' }
 ]
 
 export const keyName = (p: ProviderId) => `ai.${p}.key`
@@ -129,6 +130,23 @@ function resolveModel(p: ProviderId, override?: string): string {
   return row?.default_model || PROVIDERS.find((x) => x.id === p)!.suggested[0]
 }
 
+export const isModelGone = (e: any) => e?.status === 404 || /model_not_found|does not exist|decommissioned|no longer supported/i.test(String(e?.message))
+
+/** Picks a model the provider still offers (suggested ones first), saves it as the default and tells the user. */
+async function replacementModel(p: ProviderId, gone: string): Promise<string | null> {
+  try {
+    const available = await listModels(p)
+    const pick = PROVIDERS.find((x) => x.id === p)!.suggested.find((m) => m !== gone && available.includes(m)) ?? null
+    if (!pick) return null
+    db().run('UPDATE ai_providers SET default_model = ? WHERE id = ?', pick, p)
+    log.warn(`Model ${gone} is no longer available on ${p}; switched to ${pick}`)
+    bus.publish('notify', { title: 'AI model updated', body: `${gone} is no longer offered by ${p}. Now using ${pick}.` })
+    return pick
+  } catch {
+    return null
+  }
+}
+
 /** Groq rejects a JSON-mode answer that isn't JSON (400 json_validate_failed) but returns the text: keep it so the JSON repair step can fix it. */
 async function createCompletion(client: any, body: any, p: ProviderId): Promise<any> {
   try {
@@ -163,7 +181,14 @@ export async function generate(req: GenerateRequest): Promise<GenerateResult> {
     }
   }
   try {
-    return { ...(await attempt(primary, resolveModel(primary, req.model))), fellBack: false }
+    try {
+      return { ...(await attempt(primary, resolveModel(primary, req.model))), fellBack: false }
+    } catch (e: any) {
+      // The saved model was retired by the provider: switch to one that exists and try once more.
+      const replacement = !req.model && isModelGone(e) ? await replacementModel(primary, resolveModel(primary)) : null
+      if (!replacement) throw e
+      return { ...(await attempt(primary, replacement)), fellBack: false }
+    }
   } catch (e) {
     const fb = settings.fallbackProvider
     if (req.allowFallback !== false && settings.fallbackEnabled && fb && fb !== primary && secrets.has(keyName(fb))) {
