@@ -26,6 +26,15 @@ export interface GenerateRequest {
   model?: string
   /** Allow the configured fallback provider for this call (default true). */
   allowFallback?: boolean
+  /** JSON Schema for constrained output where the model supports strict structured outputs (else plain JSON mode). */
+  schema?: { name: string; schema: Record<string, unknown> }
+}
+
+/** Models with strict structured outputs (constrained decoding). Groq: console.groq.com/docs/structured-outputs */
+export function supportsStrictSchema(p: ProviderId, model: string): boolean {
+  if (p === 'groq') return /^(openai\/gpt-oss-(20b|120b)|qwen\/qwen3\.8)/.test(model)
+  if (p === 'openai') return /^(gpt-4o|gpt-4\.1|gpt-5|o[134])/.test(model)
+  return false
 }
 
 export interface GenerateResult {
@@ -41,7 +50,7 @@ export const PROVIDERS: { id: ProviderId; name: string; suggested: string[]; doc
   { id: 'anthropic', name: 'Anthropic Claude', suggested: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'], docs: 'https://console.anthropic.com/settings/keys' },
   { id: 'openai', name: 'OpenAI', suggested: ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4o'], docs: 'https://platform.openai.com/api-keys' },
   { id: 'gemini', name: 'Google Gemini', suggested: ['gemini-2.5-pro', 'gemini-2.5-flash'], docs: 'https://aistudio.google.com/apikey' },
-  { id: 'groq', name: 'Groq', suggested: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b'], docs: 'https://console.groq.com/keys' }
+  { id: 'groq', name: 'Groq', suggested: ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b', 'openai/gpt-oss-20b'], docs: 'https://console.groq.com/keys' }
 ]
 
 export const keyName = (p: ProviderId) => `ai.${p}.key`
@@ -82,9 +91,19 @@ async function callProvider(p: ProviderId, model: string, req: GenerateRequest):
       messages: [{ role: 'system', content: req.system }, ...req.messages],
       ...(p === 'openai' ? { max_completion_tokens: max } : { max_tokens: max }),
       ...(p === 'groq' || openaiSupportsTemperature(model) ? { temperature } : {}),
-      ...(req.json ? { response_format: { type: 'json_object' } } : {}),
+      ...(req.json
+        ? {
+            response_format:
+              req.schema && supportsStrictSchema(p, model)
+                ? { type: 'json_schema', json_schema: { name: req.schema.name, strict: true, schema: req.schema.schema } }
+                : { type: 'json_object' }
+          }
+        : {}),
       // gpt-oss on Groq: low reasoning keeps answers fast and within the free tier's token-per-minute limit.
-      ...(p === 'groq' && /gpt-oss/.test(model) ? { reasoning_effort: 'low' } : {})
+      // Groq reasoning models (docs: console.groq.com/docs/reasoning): gpt-oss takes low|medium|high; Qwen takes none..high
+      // and needs reasoning off (or parsed/hidden) with JSON mode.
+      ...(p === 'groq' && /gpt-oss/.test(model) ? { reasoning_effort: 'low' } : {}),
+      ...(p === 'groq' && /^qwen\//.test(model) ? { reasoning_effort: 'none' } : {})
     }, p)
     return {
       text: res.choices?.[0]?.message?.content ?? '',
@@ -129,6 +148,9 @@ function resolveModel(p: ProviderId, override?: string): string {
   const row = db().get<{ default_model: string | null }>('SELECT default_model FROM ai_providers WHERE id = ?', p)
   return row?.default_model || PROVIDERS.find((x) => x.id === p)!.suggested[0]
 }
+
+export const isDailyLimit = (e: any) => /tokens per day|requests per day|\bTPD\b|\bRPD\b/i.test(String(e?.message))
+let lastLimitNotice = 0
 
 export const isModelGone = (e: any) => e?.status === 404 || /model_not_found|does not exist|decommissioned|no longer supported/i.test(String(e?.message))
 
@@ -186,8 +208,24 @@ export async function generate(req: GenerateRequest): Promise<GenerateResult> {
     } catch (e: any) {
       // The saved model was retired by the provider: switch to one that exists and try once more.
       const replacement = !req.model && isModelGone(e) ? await replacementModel(primary, resolveModel(primary)) : null
-      if (!replacement) throw e
-      return { ...(await attempt(primary, replacement)), fellBack: false }
+      if (replacement) return { ...(await attempt(primary, replacement)), fellBack: false }
+      // Free plans limit tokens per day per model: use the provider's next recommended model until the limit resets.
+      if (!req.model && isDailyLimit(e)) {
+        const current = resolveModel(primary)
+        for (const m of PROVIDERS.find((x) => x.id === primary)!.suggested.filter((m) => m !== current)) {
+          try {
+            const r = await attempt(primary, m)
+            if (Date.now() - lastLimitNotice > 3600_000) {
+              lastLimitNotice = Date.now()
+              bus.publish('notify', { title: 'AI daily limit reached', body: `${current} hit its daily limit; using ${m} until it resets.` })
+            }
+            return { ...r, fellBack: true }
+          } catch (e2) {
+            if (!isDailyLimit(e2) && !isModelGone(e2)) throw e2
+          }
+        }
+      }
+      throw e
     }
   } catch (e) {
     const fb = settings.fallbackProvider

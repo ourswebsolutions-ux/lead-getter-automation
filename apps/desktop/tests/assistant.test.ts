@@ -102,6 +102,8 @@ describe('assistant reply parsing', () => {
   it('accepts the shapes models produce', () => {
     expect(A.readReply({ say: 'x', calls: [{ tool: 'overview', args: {} }] }).calls).toEqual([{ tool: 'overview', args: {} }])
     expect(A.readReply({ tool_calls: [{ function: { name: 'find_emails', arguments: '{"category":"Shoes"}' } }] }).calls).toEqual([{ tool: 'find_emails', args: { category: 'Shoes' } }])
+    expect(A.readReply({ say: '', calls: [{ tool: 'find_emails', args_json: '{"category":"Shoes"}' }] }).calls).toEqual([{ tool: 'find_emails', args: { category: 'Shoes' } }])
+    expect(A.readReply({ calls: [{ tool: 'maps_search', args_json: 'campaign is ready' }, { tool: 'overview', args_json: '' }] }).calls).toEqual([{ tool: 'overview', args: {} }])
     expect(A.readReply({ tool: 'stop_search' }).calls).toEqual([{ tool: 'stop_search', args: {} }])
     expect(A.readReply({ name: 'category_details', arguments: { category: 'Shoes' } }).calls).toEqual([{ tool: 'category_details', args: { category: 'Shoes' } }])
     expect(A.readReply({ message: 'hi' })).toEqual({ say: 'hi', calls: [] })

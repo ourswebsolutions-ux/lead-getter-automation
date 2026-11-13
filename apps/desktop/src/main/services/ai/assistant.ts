@@ -133,7 +133,7 @@ interface Tool {
 const TOOLS: Record<string, Tool> = {
   overview: {
     args: '{}',
-    desc: 'Totals: businesses, categories, emails, accounts, campaigns, sent/failed, replies, interested, approvals, running search.',
+    desc: 'Totals + per-category counts, campaigns, replies, running search.',
     run: () => {
       const es = email.emailStats()
       const active = gmaps.activeSearch() as any
@@ -161,12 +161,12 @@ const TOOLS: Record<string, Tool> = {
   },
   list_categories: {
     args: '{}',
-    desc: 'All categories with business / email counts.',
+    desc: 'Categories with counts.',
     run: () => db().all<{ id: number; name: string }>('SELECT id, name FROM lead_categories ORDER BY name').map((c) => ({ name: c.name, ...categoryStats(c.id) })).filter((c) => c.businesses > 0 || true)
   },
   create_category: {
     args: '{"name": string}',
-    desc: 'Create a category (returns the existing one if the name already exists).',
+    desc: 'Create (or reuse) a category.',
     run: (a) => {
       const c = ensureCategory(norm(a.name))
       remember({ categoryId: c.id, categoryName: c.name })
@@ -185,7 +185,7 @@ const TOOLS: Record<string, Tool> = {
   },
   category_details: {
     args: '{"category": string}',
-    desc: 'Counts for one category: businesses, with email, verified email, with website, website but no email.',
+    desc: "One category's counts (businesses, emails, websites).",
     run: (a) => {
       const c = categoryOrThrow(a.category)
       remember({ categoryId: c.id, categoryName: c.name })
@@ -194,7 +194,7 @@ const TOOLS: Record<string, Tool> = {
   },
   find_businesses: {
     args: '{"category"?: string, "country"?: string, "city"?: string, "text"?: string, "has_email"?: boolean, "has_website"?: boolean, "limit"?: number}',
-    desc: 'Look up saved businesses. Returns the total and a few examples. Use has_website=true + has_email=false for "websites without emails".',
+    desc: 'Find saved businesses; has_website+!has_email = websites without emails.',
     run: (a) => {
       const f: LeadFilter = {}
       if (a.category) f.categoryIds = [categoryOrThrow(a.category).id]
@@ -213,7 +213,7 @@ const TOOLS: Record<string, Tool> = {
   },
   maps_search: {
     args: '{"keyword": string, "location"?: string, "category"?: string}',
-    desc: 'Start a Google Maps search in the background (runs in Chrome). Saves businesses into the category (created if missing), skips duplicates and finds emails on their websites automatically.',
+    desc: 'Start a background Google Maps search; saves into category, skips duplicates, finds emails.',
     run: (a) => {
       const keyword = norm(a.keyword)
       if (!keyword) throw new Error('A keyword is needed, e.g. "shoes shop".')
@@ -226,7 +226,7 @@ const TOOLS: Record<string, Tool> = {
   },
   search_status: {
     args: '{}',
-    desc: 'Progress of the running (or last) Google Maps search and the email finder.',
+    desc: 'Progress of search + email finder.',
     run: () => {
       const id = (gmaps.activeSearch() as any)?.id ?? memory().searchId
       const s = id ? db().get<any>('SELECT * FROM maps_searches WHERE id = ?', id) : db().get<any>('SELECT * FROM maps_searches ORDER BY id DESC LIMIT 1')
@@ -241,7 +241,7 @@ const TOOLS: Record<string, Tool> = {
   },
   stop_search: {
     args: '{}',
-    desc: 'Stop the running Google Maps search (already saved businesses are kept).',
+    desc: 'Stop the Maps search.',
     run: () => {
       if (!gmaps.activeSearch()) return { stopped: false, reason: 'No search is running.' }
       gmaps.stopSearch()
@@ -250,7 +250,7 @@ const TOOLS: Record<string, Tool> = {
   },
   move_to_category: {
     args: '{"category": string, "from_search"?: "last", "from_category"?: string}',
-    desc: 'Move businesses into a category (created if missing): the last search\'s results, or everything in another category.',
+    desc: 'Move last search results (or another category) into a category.',
     run: (a) => {
       const to = ensureCategory(norm(a.category))
       let ids: number[]
@@ -267,7 +267,7 @@ const TOOLS: Record<string, Tool> = {
   },
   find_emails: {
     args: '{"category": string}',
-    desc: 'Queue every business in a category that has a website but no email: the background email finder visits the website and contact pages and saves real emails it finds (never guessed). Verification colours them.',
+    desc: "Find real emails on websites of a category's businesses (background).",
     run: (a) => {
       const c = categoryOrThrow(a.category)
       const rows = db().all<{ id: number; website: string; r: number | null }>(
@@ -290,7 +290,7 @@ const TOOLS: Record<string, Tool> = {
   },
   list_email_accounts: {
     args: '{}',
-    desc: 'Connected sending accounts with status, today\'s count and categories.',
+    desc: 'Sending accounts.',
     run: () => {
       const cats = email.accountCategories()
       return db()
@@ -306,12 +306,12 @@ const TOOLS: Record<string, Tool> = {
   },
   add_email_account: {
     args: '{}',
-    desc: 'Passwords are never typed in chat: this shows a button that opens the secure Add account form.',
+    desc: 'Show the secure Add-account form button (never ask passwords).',
     run: () => ({ ok: true, _button: { label: 'Add email account', page: 'email-accounts', params: { add: true } } })
   },
   assign_account_to_category: {
     args: '{"account": string, "categories": string[]}',
-    desc: 'Make an email account send to these categories (kept in addition to its existing ones).',
+    desc: 'Let an account send to categories.',
     run: (a) => {
       const acc = accountByEmail(a.account)
       if (!acc) throw new Error(`No email account matching "${norm(a.account)}". Add it first.`)
@@ -323,12 +323,12 @@ const TOOLS: Record<string, Tool> = {
   },
   list_templates: {
     args: '{}',
-    desc: 'Saved email templates.',
+    desc: 'Saved templates.',
     run: () => templates.listTemplates().map((t) => ({ name: t.name, subject: t.subject, used_in_campaigns: t.used }))
   },
   write_template: {
     args: '{"category": string, "offer"?: string, "name"?: string}',
-    desc: 'AI writes a category-specific email template (subject + body with {business_name}/{contact_name}/{city} variables) and saves it. The user can edit it in Email Templates.',
+    desc: 'AI writes + saves a category-specific template.',
     run: async (a) => {
       const c = categoryOrThrow(a.category)
       const s = getSettings()
@@ -345,7 +345,7 @@ Write a reusable first-touch email template for businesses in the category "${c.
 ${s.company.signature ? `- End with this signature:\n${s.company.signature}` : '- No signature.'}
 Return JSON {"subject": string, "body": string}`,
         messages: [{ role: 'user', content: `Category: ${c.name}. Offer: ${offer}.` }],
-        maxTokens: 900
+        maxTokens: 600
       })
       const id = templates.saveTemplate({ name: norm(a.name) || `${c.name} — ${title(offer)}`, subject: r.subject, body: r.body })
       return { saved_template: norm(a.name) || `${c.name} — ${title(offer)}`, id, subject: r.subject, body: r.body, _button: { label: 'Edit template', page: 'email-templates' } }
@@ -353,7 +353,7 @@ Return JSON {"subject": string, "body": string}`,
   },
   prepare_campaign: {
     args: '{"categories": string[], "accounts"?: string[], "templates"?: string[], "ai_personalize"?: boolean, "offer"?: string, "start_at"?: "YYYY-MM-DDTHH:mm" local time}',
-    desc: 'Prepare an email campaign and show the user a summary with an Approve button. Nothing is sent until the user approves. ai_personalize=true lets AI write each email for each business (templates become the base idea).',
+    desc: 'Prepare campaign + summary for approval (nothing sent yet). ai_personalize = AI writes each email.',
     run: (a, ctx) => {
       const cats = (a.categories?.length ? a.categories : [memory().categoryName]).map((x: string) => categoryOrThrow(x))
       const all = db().all<{ id: number; from_email: string; status: string; enabled: number }>('SELECT id, from_email, status, enabled FROM smtp_accounts')
@@ -405,7 +405,7 @@ Return JSON {"subject": string, "body": string}`,
   },
   confirm_campaign: {
     args: '{}',
-    desc: 'Start the prepared campaign. ONLY when the user clearly approved in their latest message after seeing the summary.',
+    desc: "Start the prepared campaign — only after the user's clear yes.",
     run: (_a, ctx) => {
       const p = memory().pending
       if (!p) throw new Error('No campaign is waiting for approval. Prepare one first.')
@@ -415,7 +415,7 @@ Return JSON {"subject": string, "body": string}`,
   },
   campaigns_status: {
     args: '{}',
-    desc: 'Email campaigns with progress (newest first).',
+    desc: 'Campaign progress.',
     run: () =>
       campaigns
         .listCampaigns('email')
@@ -424,7 +424,7 @@ Return JSON {"subject": string, "body": string}`,
   },
   campaign_control: {
     args: '{"action": "pause"|"resume"|"stop", "campaign"?: string (name or id; default: the current running one)}',
-    desc: 'Pause, resume or stop an email campaign.',
+    desc: 'Pause/resume/stop a campaign.',
     run: (a) => {
       const list = campaigns.listCampaigns('email') as any[]
       const q = norm(a.campaign).toLowerCase()
@@ -441,7 +441,7 @@ Return JSON {"subject": string, "body": string}`,
   },
   pending_replies: {
     args: '{}',
-    desc: 'Replies waiting for the user: AI reply drafts / pricing approvals, and unread email replies.',
+    desc: 'Replies + approvals waiting.',
     run: () => {
       const ap = (listApprovals('open') as any[]).slice(0, 10).map((x) => ({ business: x.business_name ?? x.address, kind: x.kind, title: x.title, suggested: String(x.suggested_response ?? '').slice(0, 160) }))
       const unread = db().all<any>(
@@ -453,7 +453,7 @@ Return JSON {"subject": string, "body": string}`,
   },
   open_screen: {
     args: '{"screen": "maps"|"email-accounts"|"email-templates"|"email-campaigns"|"email-accounts"|"conversations"|"agent"|"settings"|"verification"|"dashboard"}',
-    desc: 'Show a button that opens a screen of the app.',
+    desc: 'Button to open a screen.',
     run: (a) => ({ ok: true, _button: { label: `Open ${norm(a.screen).replace(/-/g, ' ')}`, page: norm(a.screen) } })
   }
 }
@@ -499,18 +499,18 @@ RULES
 - Never mention tool names (like search_status) to the user; say it in plain words ("I can check progress for you").
 
 EXAMPLES
-User: "Start an email campaign for Shoes" → {"say": "", "calls": [{"tool": "prepare_campaign", "args": {"categories": ["Shoes"]}}]} → then show the summary from the result and ask for approval.
-User: "haan start kr do" (after a summary) → {"say": "", "calls": [{"tool": "confirm_campaign", "args": {}}]}
-User: "Shoes ki emails dhundo" → {"say": "", "calls": [{"tool": "find_emails", "args": {"category": "Shoes"}}]}
+User: "Start an email campaign for Shoes" → {"say": "", "calls": [{"tool": "prepare_campaign", "args_json": "{\\"categories\\": [\\"Shoes\\"]}"}]} → then show the summary from the result and ask for approval.
+User: "haan start kr do" (after a summary) → {"say": "", "calls": [{"tool": "confirm_campaign", "args_json": "{}"}]}
+User: "Shoes ki emails dhundo" → {"say": "", "calls": [{"tool": "find_emails", "args_json": "{\\"category\\": \\"Shoes\\"}"}]}
 
 OUTPUT: one JSON object only:
-{"say": "message to the user", "calls": [{"tool": "name", "args": {...}}]}
+{"say": "message to the user", "calls": [{"tool": "name", "args_json": "{...arguments as JSON...}"}]}
 - To act, put tool calls in "calls" (say can be a very short progress note or empty). You will then get the results and must answer again.
 - When done, return "calls": [] and the final "say".`
 }
 
 /** Builds model history from the stored chat: user turns, assistant answers and compact tool notes. */
-function history(limit = 16): ChatMessage[] {
+function history(limit = 10): ChatMessage[] {
   const rows = listMessages(limit)
   const out: ChatMessage[] = []
   for (const r of rows) {
@@ -545,6 +545,30 @@ export function plain(text: string): string {
 
 const CLAIM_RE = /approv|confirm|\b(start|started|starting|running|stopped|paused|resumed|created|saved|moved|queued|launched|sent)\b|shuru|ho gay|ho gai|chal (rahi|raha)|band kar|ban gay|ban gai|kar diya|kr diya/i
 
+/** Strict output shape: the model can only answer {say, calls:[{tool, args_json}]} with a real tool name. */
+function replySchema() {
+  return {
+    name: 'assistant_reply',
+    schema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['say', 'calls'],
+      properties: {
+        say: { type: 'string' },
+        calls: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['tool', 'args_json'],
+            properties: { tool: { type: 'string', enum: Object.keys(TOOLS) }, args_json: { type: 'string', description: 'Tool arguments as a JSON object string, e.g. {"category":"Shoes"}' } }
+          }
+        }
+      }
+    }
+  }
+}
+
 /** Accepts the reply shapes models actually produce: calls / tool_calls / actions, or a single {tool, args}. */
 export function readReply(raw: any): { say: string; calls: { tool: string; args: any }[] } {
   const say = norm(raw?.say ?? raw?.message ?? raw?.reply ?? raw?.answer)
@@ -554,17 +578,17 @@ export function readReply(raw: any): { say: string; calls: { tool: string; args:
   const calls = list
     .map((c) => {
       const fn = c?.function ?? c
-      let args = fn?.args ?? fn?.arguments ?? fn?.parameters ?? fn?.input ?? {}
+      let args = fn?.args ?? fn?.arguments ?? fn?.args_json ?? fn?.parameters ?? fn?.input ?? {}
       if (typeof args === 'string') {
         try {
-          args = JSON.parse(args)
+          args = args.trim() ? JSON.parse(args) : {}
         } catch {
-          args = {}
+          args = null // arguments that aren't JSON: the call is dropped, never run with guessed values
         }
       }
-      return { tool: norm(fn?.tool ?? fn?.name), args: args && typeof args === 'object' ? args : {} }
+      return { tool: norm(fn?.tool ?? fn?.name), args: args && typeof args === 'object' && !Array.isArray(args) ? args : null }
     })
-    .filter((c) => c.tool)
+    .filter((c): c is { tool: string; args: any } => !!c.tool && c.args !== null)
     .slice(0, 5)
   return { say, calls }
 }
@@ -602,8 +626,8 @@ export async function ask(text: string): Promise<void> {
     let guardRetries = 0
     for (let step = 0; step < 8; step++) {
       if (ctl.signal.aborted) throw new Error('Stopped.')
-      const raw = await generateJson<any>({ purpose: 'assistant', system: systemPrompt(), messages: convo, maxTokens: 900 })
-      if (process.env.LGE_DEBUG_ASSISTANT) console.error('RAW', raw._meta?.text)
+      const raw = await generateJson<any>({ purpose: 'assistant', system: systemPrompt(), messages: convo, maxTokens: 400, schema: replySchema() })
+      if (process.env.LGE_DEBUG_ASSISTANT) console.error('RAW', new Date().toISOString().slice(11, 19), raw._meta?.inputTokens, raw._meta?.outputTokens, raw._meta?.text)
       let r = readReply(raw)
       if (ctl.signal.aborted) throw new Error('Stopped.')
       if (!r.calls.length && !r.say) {
@@ -613,7 +637,8 @@ export async function ask(text: string): Promise<void> {
             purpose: 'assistant',
             system: systemPrompt(),
             messages: [...convo, { role: 'assistant', content: '{}' }, { role: 'user', content: 'Your answer was empty. Do what I asked: return {"say": ..., "calls": [...]} with the tool calls needed, or the final answer.' }],
-            maxTokens: 900
+            maxTokens: 400,
+            schema: replySchema()
           })
         )
       }
