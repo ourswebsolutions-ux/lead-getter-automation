@@ -149,6 +149,12 @@ const TOOLS: Record<string, Tool> = {
         interested_leads: n("SELECT COUNT(*) n FROM leads WHERE outreach_status = 'interested' AND deleted_at IS NULL"),
         pending_approvals: n("SELECT COUNT(*) n FROM approvals WHERE status IN ('pending','needs_pricing_config')"),
         maps_search_running: active ? `${active.keyword}${active.location ? ` in ${active.location}` : ''} (${active.saved} saved)` : null,
+        categories_breakdown: db()
+          .all<{ id: number; name: string }>('SELECT c.id, c.name FROM lead_categories c WHERE EXISTS (SELECT 1 FROM leads l WHERE l.category_id = c.id AND l.deleted_at IS NULL) ORDER BY c.name LIMIT 15')
+          .map((c) => {
+            const st = categoryStats(c.id)
+            return { name: c.name, businesses: st.businesses, with_email: st.with_email, verified_email: st.verified_email }
+          }),
         auto_reply_agent: getSettings().agent.enabled ? (getSettings().agent.autoSendReplies ? 'on, auto-sends safe replies' : 'on, replies need approval') : 'off'
       }
     }
@@ -458,7 +464,12 @@ function startPending() {
   if (!p) throw new Error('No campaign is waiting for approval.')
   const r = campaigns.launchEmailCampaign(p.input)
   remember({ pending: null })
-  return { started: !r.scheduled, scheduled: r.scheduled, campaign_id: r.id, recipients: r.added, _button: { label: 'Open campaign', page: 'email-campaigns', params: { id: r.id } } }
+  return {
+    started: !r.scheduled,
+    scheduled: r.scheduled,
+    campaign_id: r.id,
+    recipients: r.added,
+    note: 'No email has been sent yet: they go out one by one (about one every 4 minutes) within the sending hours.', _button: { label: 'Open campaign', page: 'email-campaigns', params: { id: r.id } } }
 }
 
 // ---------------------------------------------------------------- the conversation loop
@@ -484,6 +495,13 @@ RULES
 - Campaigns: always prepare_campaign first and show its summary; it is sent only after the user approves (they may click Approve or say yes). Call confirm_campaign only when the user's newest message is a clear yes to that summary.
 - Never ask for or repeat passwords; to add an email account use add_email_account (it shows a secure form button).
 - Never invent prices, promises or facts about the user's business.
+- Never write a campaign summary or ask "approve?" yourself — only prepare_campaign creates a campaign summary. Every number you state must come from a tool result.
+- Never mention tool names (like search_status) to the user; say it in plain words ("I can check progress for you").
+
+EXAMPLES
+User: "Start an email campaign for Shoes" → {"say": "", "calls": [{"tool": "prepare_campaign", "args": {"categories": ["Shoes"]}}]} → then show the summary from the result and ask for approval.
+User: "haan start kr do" (after a summary) → {"say": "", "calls": [{"tool": "confirm_campaign", "args": {}}]}
+User: "Shoes ki emails dhundo" → {"say": "", "calls": [{"tool": "find_emails", "args": {"category": "Shoes"}}]}
 
 OUTPUT: one JSON object only:
 {"say": "message to the user", "calls": [{"tool": "name", "args": {...}}]}
@@ -492,12 +510,12 @@ OUTPUT: one JSON object only:
 }
 
 /** Builds model history from the stored chat: user turns, assistant answers and compact tool notes. */
-function history(limit = 30): ChatMessage[] {
+function history(limit = 16): ChatMessage[] {
   const rows = listMessages(limit)
   const out: ChatMessage[] = []
   for (const r of rows) {
     const role: 'user' | 'assistant' = r.role === 'user' ? 'user' : 'assistant'
-    const content = r.role === 'tool' ? `[I ran ${r.data?.tool}: ${r.data?.ok ? 'ok' : 'FAILED'} ${JSON.stringify(r.data?.result ?? r.data?.error).slice(0, 400)}]` : r.content
+    const content = r.role === 'tool' ? `[I ran ${r.data?.tool}: ${r.data?.ok ? 'ok' : 'FAILED'} ${JSON.stringify(r.data?.result ?? r.data?.error).slice(0, 220)}]` : r.content
     const last = out[out.length - 1]
     if (last && last.role === role) last.content += `\n${content}`
     else out.push({ role, content })
@@ -513,6 +531,53 @@ function cleanResult(r: any) {
   if (!r || typeof r !== 'object' || Array.isArray(r)) return r
   const { _button, ...rest } = r
   return rest
+}
+
+/** Removes internal tool names the model sometimes mentions ("use search_status") from what the user sees. */
+const PLAIN: Record<string, string> = {
+  search_status: 'progress', category_details: 'category details', campaigns_status: 'campaign progress', pending_replies: 'pending replies',
+  find_emails: 'email finder', prepare_campaign: 'campaign setup', confirm_campaign: 'approval', list_categories: 'categories', find_businesses: 'business list'
+}
+export function plain(text: string): string {
+  return norm(text)
+    .replace(/[`"“”']?\b([a-z]+_[a-z_]+)\b[`"“”']?(\s+tool(s)?)?/g, (m, name) => (name in PLAIN ? PLAIN[name] : name in TOOLS ? name.replace(/_/g, ' ') : m))
+}
+
+const CLAIM_RE = /approv|confirm|\b(start|started|starting|running|stopped|paused|resumed|created|saved|moved|queued|launched|sent)\b|shuru|ho gay|ho gai|chal (rahi|raha)|band kar|ban gay|ban gai|kar diya|kr diya/i
+
+/** Accepts the reply shapes models actually produce: calls / tool_calls / actions, or a single {tool, args}. */
+export function readReply(raw: any): { say: string; calls: { tool: string; args: any }[] } {
+  const say = norm(raw?.say ?? raw?.message ?? raw?.reply ?? raw?.answer)
+  let list: any[] = raw?.calls ?? raw?.tool_calls ?? raw?.actions ?? raw?.tools ?? []
+  if (!Array.isArray(list)) list = [list]
+  if (!list.length && (raw?.tool || (raw?.name && (raw?.arguments || raw?.args)))) list = [raw]
+  const calls = list
+    .map((c) => {
+      const fn = c?.function ?? c
+      let args = fn?.args ?? fn?.arguments ?? fn?.parameters ?? fn?.input ?? {}
+      if (typeof args === 'string') {
+        try {
+          args = JSON.parse(args)
+        } catch {
+          args = {}
+        }
+      }
+      return { tool: norm(fn?.tool ?? fn?.name), args: args && typeof args === 'object' ? args : {} }
+    })
+    .filter((c) => c.tool)
+    .slice(0, 5)
+  return { say, calls }
+}
+
+/** Short, clear text for AI provider errors (rate limits, bad keys, network). */
+export function friendlyError(e: any): string {
+  const m = String(e?.message ?? e)
+  const wait = /try again in ([\dhms.]+)/i.exec(m)?.[1]?.replace(/\.\d+s/, 's').replace(/\.+$/, '')
+  if (/tokens per day|TPD|quota|insufficient_quota|billing/i.test(m)) return `The AI provider's daily limit is used up${wait ? ` — it resets in about ${wait}` : ''}. Try later, upgrade the plan, or pick another model/provider in AI settings.`
+  if (/429|rate limit/i.test(m)) return `The AI provider is busy (rate limit)${wait ? ` — try again in ${wait}` : ''}.`
+  if (/401|invalid api key|invalid_api_key|authentication/i.test(m)) return 'The AI key was rejected. Check it in AI settings.'
+  if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|fetch failed|network/i.test(m)) return 'Could not reach the AI provider. Check the internet connection.'
+  return `Something went wrong: ${m.slice(0, 200)}`
 }
 
 /** Handles one user message: runs tools until the model gives a final answer. */
@@ -533,17 +598,42 @@ export async function ask(text: string): Promise<void> {
   const buttons: Button[] = []
   try {
     const convo = history()
+    let usedTools = false
+    let guardRetries = 0
     for (let step = 0; step < 8; step++) {
       if (ctl.signal.aborted) throw new Error('Stopped.')
-      const r = await generateJson<{ say?: string; calls?: { tool: string; args?: any }[] }>({ purpose: 'assistant', system: systemPrompt(), messages: convo, maxTokens: 1500 })
+      const raw = await generateJson<any>({ purpose: 'assistant', system: systemPrompt(), messages: convo, maxTokens: 900 })
+      if (process.env.LGE_DEBUG_ASSISTANT) console.error('RAW', raw._meta?.text)
+      let r = readReply(raw)
       if (ctl.signal.aborted) throw new Error('Stopped.')
-      const calls = Array.isArray(r.calls) ? r.calls.slice(0, 5) : []
+      if (!r.calls.length && !r.say) {
+        // Empty answer: ask once more, explicitly.
+        r = readReply(
+          await generateJson<any>({
+            purpose: 'assistant',
+            system: systemPrompt(),
+            messages: [...convo, { role: 'assistant', content: '{}' }, { role: 'user', content: 'Your answer was empty. Do what I asked: return {"say": ..., "calls": [...]} with the tool calls needed, or the final answer.' }],
+            maxTokens: 900
+          })
+        )
+      }
+      if (ctl.signal.aborted) throw new Error('Stopped.')
+      const calls = r.calls
+      if (!calls.length && !usedTools && CLAIM_RE.test(r.say) && guardRetries++ < 1) {
+        // The answer claims something happened (or asks for approval) but no tool ran this turn.
+        convo.push({ role: 'assistant', content: JSON.stringify({ say: r.say, calls: [] }) })
+        convo.push({
+          role: 'user',
+          content: 'You called no tool in this turn, yet your answer says something was done or asks for approval. That is not allowed. If my message asks for an action (or approves a prepared campaign → confirm_campaign), call the tool now. Otherwise answer again without claiming any action.'
+        })
+        continue
+      }
       if (!calls.length) {
-        addMessage('assistant', norm(r.say) || 'Done.', buttons.length ? { buttons } : undefined)
+        addMessage('assistant', plain(r.say) || 'Sorry, I could not work that out. Please say it another way.', buttons.length ? { buttons } : undefined)
         return
       }
-      if (norm(r.say)) addMessage('assistant', norm(r.say), { interim: true })
       const results: any[] = []
+      usedTools = true
       for (const c of calls) {
         const tool = TOOLS[c.tool]
         let entry: any
@@ -560,11 +650,11 @@ export async function ask(text: string): Promise<void> {
         addMessage('tool', `${c.tool}: ${entry.ok ? 'ok' : entry.error ?? 'not done'}`, entry)
       }
       convo.push({ role: 'assistant', content: JSON.stringify({ say: r.say ?? '', calls }) })
-      convo.push({ role: 'user', content: `TOOL RESULTS (real, from the app):\n${JSON.stringify(results).slice(0, 12000)}\nNow continue: more calls, or the final answer with "calls": [].` })
+      convo.push({ role: 'user', content: `TOOL RESULTS (real, from the app):\n${JSON.stringify(results).slice(0, 6000)}\nNow continue: more calls, or the final answer with "calls": [].` })
     }
     addMessage('assistant', 'I stopped here to avoid running too many steps. Tell me what to do next.', buttons.length ? { buttons } : undefined)
   } catch (e: any) {
-    addMessage('assistant', e.message === 'Stopped.' ? 'Stopped.' : `Something went wrong: ${e.message}`, { error: true })
+    addMessage('assistant', e.message === 'Stopped.' ? 'Stopped.' : friendlyError(e), { error: true, buttons: /429|rate limit|quota/i.test(e.message) ? [{ label: 'AI settings', page: 'agent' }] : undefined })
   } finally {
     running = null
     bus.publish('assistant:busy', { busy: false })

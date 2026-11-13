@@ -79,10 +79,10 @@ describe('AI assistant tools', () => {
     script.push({ say: 'Restaurants category ban gayi. Unknown naam ki koi category nahi mili.', calls: [] })
     await A.ask('Restaurants category banao aur Unknown ka count batao')
     const msgs = A.listMessages()
-    expect(msgs.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'tool', 'assistant'])
-    expect(msgs[2].data).toMatchObject({ tool: 'create_category', ok: true })
-    expect(msgs[3].data).toMatchObject({ tool: 'category_details', ok: false })
-    expect(msgs[4].content).toContain('Restaurants')
+    expect(msgs.map((m) => m.role)).toEqual(['user', 'tool', 'tool', 'assistant'])
+    expect(msgs[1].data).toMatchObject({ tool: 'create_category', ok: true })
+    expect(msgs[2].data).toMatchObject({ tool: 'category_details', ok: false })
+    expect(msgs[3].content).toContain('Restaurants')
     // the second model call received the real tool results
     const { generateJson } = await import('../src/main/services/ai/providers')
     const second = (generateJson as any).mock.calls.at(-1)[0].messages.at(-1).content
@@ -95,5 +95,33 @@ describe('AI assistant tools', () => {
     await A.ask('mera gmail add kro')
     const last = A.listMessages().at(-1)!
     expect(last.data.buttons[0]).toMatchObject({ page: 'email-accounts' })
+  })
+})
+
+describe('assistant reply parsing', () => {
+  it('accepts the shapes models produce', () => {
+    expect(A.readReply({ say: 'x', calls: [{ tool: 'overview', args: {} }] }).calls).toEqual([{ tool: 'overview', args: {} }])
+    expect(A.readReply({ tool_calls: [{ function: { name: 'find_emails', arguments: '{"category":"Shoes"}' } }] }).calls).toEqual([{ tool: 'find_emails', args: { category: 'Shoes' } }])
+    expect(A.readReply({ tool: 'stop_search' }).calls).toEqual([{ tool: 'stop_search', args: {} }])
+    expect(A.readReply({ name: 'category_details', arguments: { category: 'Shoes' } }).calls).toEqual([{ tool: 'category_details', args: { category: 'Shoes' } }])
+    expect(A.readReply({ message: 'hi' })).toEqual({ say: 'hi', calls: [] })
+    expect(A.readReply({})).toEqual({ say: '', calls: [] })
+  })
+})
+
+describe('assistant wording', () => {
+  it('hides internal tool names', () => {
+    expect(A.plain('Aap "search_status" tool se progress dekh sakte hain')).toBe('Aap progress se progress dekh sakte hain')
+    expect(A.plain('use `campaigns_status` or pending_replies')).toBe('use campaign progress or pending replies')
+    expect(A.plain('email: info_sales@x.com stays')).toBe('email: info_sales@x.com stays')
+  })
+})
+
+describe('assistant errors', () => {
+  it('explains provider limits in plain words', () => {
+    expect(A.friendlyError(new Error('429 Rate limit reached ... tokens per day (TPD): Limit 200000. Please try again in 8m59.568s. Need more'))).toBe(
+      "The AI provider's daily limit is used up — it resets in about 8m59s. Try later, upgrade the plan, or pick another model/provider in AI settings."
+    )
+    expect(A.friendlyError(new Error('401 Invalid API Key'))).toMatch(/rejected/)
   })
 })

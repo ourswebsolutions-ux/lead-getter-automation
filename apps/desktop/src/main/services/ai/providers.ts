@@ -76,13 +76,15 @@ async function callProvider(p: ProviderId, model: string, req: GenerateRequest):
   }
   if (p === 'openai' || p === 'groq') {
     const client: any = p === 'openai' ? new OpenAI({ apiKey: apiKey(p), maxRetries: 2, timeout: 120_000 }) : new Groq({ apiKey: apiKey(p), maxRetries: 2, timeout: 120_000 })
-    const res = await client.chat.completions.create({
+    const res = await createCompletion(client, {
       model,
       messages: [{ role: 'system', content: req.system }, ...req.messages],
       ...(p === 'openai' ? { max_completion_tokens: max } : { max_tokens: max }),
       ...(p === 'groq' || openaiSupportsTemperature(model) ? { temperature } : {}),
-      ...(req.json ? { response_format: { type: 'json_object' } } : {})
-    })
+      ...(req.json ? { response_format: { type: 'json_object' } } : {}),
+      // gpt-oss on Groq: low reasoning keeps answers fast and within the free tier's token-per-minute limit.
+      ...(p === 'groq' && /gpt-oss/.test(model) ? { reasoning_effort: 'low' } : {})
+    }, p)
     return {
       text: res.choices?.[0]?.message?.content ?? '',
       provider: p,
@@ -125,6 +127,17 @@ function resolveModel(p: ProviderId, override?: string): string {
   if (override) return override
   const row = db().get<{ default_model: string | null }>('SELECT default_model FROM ai_providers WHERE id = ?', p)
   return row?.default_model || PROVIDERS.find((x) => x.id === p)!.suggested[0]
+}
+
+/** Groq rejects a JSON-mode answer that isn't JSON (400 json_validate_failed) but returns the text: keep it so the JSON repair step can fix it. */
+async function createCompletion(client: any, body: any, p: ProviderId): Promise<any> {
+  try {
+    return await client.chat.completions.create(body)
+  } catch (e: any) {
+    const failed = e?.error?.error?.failed_generation ?? e?.error?.failed_generation
+    if (p === 'groq' && typeof failed === 'string') return { choices: [{ message: { content: failed } }], usage: {} }
+    throw e
+  }
 }
 
 export function aiConfigured(): boolean {
