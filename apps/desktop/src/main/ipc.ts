@@ -333,6 +333,13 @@ const handlers: Record<string, Handler> = {
 }
 
 export function registerIpc(): void {
+  // The AI assistant runs actions through the same handlers (and the same subscription checks) as the screens.
+  assistant.setAppInvoker(async (channel, args) => {
+    const fn = handlers[channel]
+    if (!fn) throw new Error(`Unknown action ${channel}`)
+    if (LICENSED.has(channel) && !license.isLicensed()) throw new Error('This feature requires an active subscription.')
+    return fn(...args)
+  })
   for (const [channel, fn] of Object.entries(handlers)) {
     ipcMain.handle(channel, async (event, ...args) => {
       try {

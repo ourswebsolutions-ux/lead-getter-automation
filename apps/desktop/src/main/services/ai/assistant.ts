@@ -11,6 +11,7 @@ import * as gmaps from '../maps'
 import { backgroundStatus } from '../maps/background'
 import { listApprovals } from './agent'
 import { addEmailAccount } from '../emailAutoConfig'
+import { CATALOG, CATALOG_CHANNELS } from './assistantCatalog'
 import type { LeadFilter } from '@shared/types'
 
 /**
@@ -29,7 +30,44 @@ export interface Memory {
   categoryId?: number
   categoryName?: string
   searchId?: number
-  pending?: { kind: 'campaign'; input: campaigns.EmailLaunchInput; summary: string; afterMessageId: number } | null
+  pending?: Pending | null
+}
+
+/** An action waiting for the user's approval (campaign start, deletes, sending a message…). */
+export type Pending = { summary: string; label: string; afterMessageId: number } & (
+  | { kind: 'campaign'; input: campaigns.EmailLaunchInput }
+  | { kind: 'call'; channel: string; args: unknown[] }
+  | { kind: 'delete_categories'; ids: number[] }
+  | { kind: 'delete_leads'; ids: number[] }
+)
+
+/** Runs an app action through the same handlers the screens use (set by ipc.ts at startup). */
+let appInvoker: ((channel: string, args: unknown[]) => Promise<unknown>) | null = null
+export function setAppInvoker(fn: (channel: string, args: unknown[]) => Promise<unknown>): void {
+  appInvoker = fn
+}
+async function invoke(channel: string, args: unknown[]): Promise<unknown> {
+  if (!appInvoker) throw new Error('App actions are not available.')
+  return appInvoker(channel, args)
+}
+
+/** Keeps big results small enough for the model (rows trimmed, long text cut). */
+function compact(v: any, depth = 0): any {
+  if (Array.isArray(v)) return v.length > 25 ? [...v.slice(0, 25).map((x) => compact(x, depth + 1)), `…${v.length - 25} more`] : v.map((x) => compact(x, depth + 1))
+  if (v && typeof v === 'object') {
+    if (depth > 4) return '…'
+    const out: any = {}
+    for (const [k, x] of Object.entries(v)) if (!/password|secret|token|key$|session|creds|qr/i.test(k)) out[k] = compact(x, depth + 1)
+    return out
+  }
+  if (typeof v === 'string' && v.length > 400) return v.slice(0, 400) + '…'
+  return v
+}
+
+type PendingInput = Pending extends infer T ? (T extends any ? Omit<T, 'afterMessageId'> : never) : never
+function requestApproval(p: PendingInput, ctx: { userMessageId: number }) {
+  remember({ pending: { ...p, afterMessageId: ctx.userMessageId } as Pending })
+  return { ready: true, awaiting_user_approval: true, summary: p.summary, _button: { label: p.label, action: 'confirm' as const } }
 }
 
 export function memory(): Memory {
@@ -400,18 +438,92 @@ Return JSON {"subject": string, "body": string}`,
         `Emails: ${personalize ? `AI-personalised for each business${tpls.length ? ` (based on ${tpls.map((t: { name: string }) => t.name).join(', ')})` : ''}${input.offer ? ` — offer: ${input.offer}` : ''}` : tpls.map((t: { name: string }) => t.name).join(', ')}`,
         `When: ${a.start_at ? new Date(a.start_at).toLocaleString() : 'now'}, 9:00–20:00 daily, one email every ~4 min, account daily limits respected`
       ].join('\n')
-      remember({ pending: { kind: 'campaign', input, summary, afterMessageId: ctx.userMessageId } })
+      remember({ pending: { kind: 'campaign', input, summary, label: 'Approve & start', afterMessageId: ctx.userMessageId } })
       return { ready: true, awaiting_user_approval: true, summary, _button: { label: 'Approve & start', action: 'confirm' } }
     }
   },
-  confirm_campaign: {
+  confirm_action: {
     args: '{}',
-    desc: "Start the prepared campaign — only after the user's clear yes.",
+    desc: "Run the action waiting for approval (campaign, delete, send…) — only after the user's clear yes in their newest message.",
     run: (_a, ctx) => {
       const p = memory().pending
-      if (!p) throw new Error('No campaign is waiting for approval. Prepare one first.')
+      if (!p) throw new Error('Nothing is waiting for approval. Prepare it first.')
       if (ctx.userMessageId <= p.afterMessageId) throw new Error('The user has not approved yet: show the summary and wait for their answer.')
-      return startPending()
+      return runPending()
+    }
+  },
+  capabilities: {
+    args: '{"area": string}',
+    desc: `Everything you can do in one area of the app (exact actions + arguments). Areas: ${Object.keys(CATALOG).join(', ')}.`,
+    run: (a) => {
+      const area = CATALOG[norm(a.area)]
+      if (!area) throw new Error(`Unknown area. Areas: ${Object.keys(CATALOG).join(', ')}`)
+      return { area: norm(a.area), about: area.about, actions: Object.entries(area.calls).map(([ch, e]) => ({ action: ch, args: e.args, does: e.desc, needs_approval: !!e.confirm })) }
+    }
+  },
+  app_call: {
+    args: '{"action": string, "args": [] }',
+    desc: 'Run an action listed by capabilities (args is the positional list shown there). Actions that need approval show the user an Approve button first.',
+    run: async (a, ctx) => {
+      const channel = norm(a.action ?? a.channel ?? a.name)
+      const entry = CATALOG_CHANNELS[channel]
+      if (!entry)
+        throw new Error(channel ? `"${channel}" is not an allowed action. Call capabilities first.` : 'Missing "action". Use {"action": "settings:update", "args": [ ... ]} with an action from capabilities.')
+      // Models sometimes send {action, patch: {...}} or {action, id: 5}: treat the other fields as the single argument.
+      const { action: _a, channel: _c, name: _n, args: rawArgs, ...rest } = a
+      let args: unknown[] = Array.isArray(rawArgs) ? rawArgs : rawArgs !== undefined ? [rawArgs] : Object.keys(rest).length === 1 ? [Object.values(rest)[0]] : Object.keys(rest).length ? [rest] : []
+      // Arguments sent as JSON text ("{...}") are parsed.
+      args = args.map((x) => {
+        if (typeof x === 'string' && /^\s*[[{]/.test(x)) {
+          try {
+            return JSON.parse(x)
+          } catch {
+            return x
+          }
+        }
+        return x
+      })
+      if (!args.length && entry.args !== '[]') throw new Error(`${channel} needs args ${entry.args}.`)
+      if (entry.confirm) return requestApproval({ kind: 'call', channel, args, summary: `${entry.desc}\n${await describeCall(channel, args)}`, label: /delete|remove|wipe|logout/i.test(channel) ? 'Yes, do it' : 'Approve' }, ctx)
+      return { ok: true, result: compact(await invoke(channel, args)) }
+    }
+  },
+  delete_categories: {
+    args: '{"categories": string[] | "empty"}',
+    desc: 'Delete categories ("empty" = every category with no businesses). Leads of deleted categories move to Other. Asks for approval.',
+    run: (a, ctx) => {
+      const all = db().all<{ id: number; name: string; n: number }>(
+        "SELECT c.id, c.name, (SELECT COUNT(*) FROM leads l WHERE l.category_id = c.id AND l.deleted_at IS NULL) n FROM lead_categories c WHERE c.name != 'Other' ORDER BY c.name"
+      )
+      const pick = a.categories === 'empty' || (Array.isArray(a.categories) && a.categories.length === 1 && /^empty$/i.test(a.categories[0])) ? all.filter((c) => !c.n) : (a.categories ?? []).map((x: string) => {
+        const c = categoryOrThrow(x)
+        if (c.name === 'Other') throw new Error('"Other" cannot be deleted.')
+        return all.find((y) => y.id === c.id)!
+      })
+      if (!pick.length) return { ok: false, problem: 'Nothing to delete — no matching (empty) categories.' }
+      const moved = pick.reduce((s: number, c: { n: number }) => s + c.n, 0)
+      return requestApproval(
+        { kind: 'delete_categories', ids: pick.map((c: { id: number }) => c.id), summary: `Delete ${pick.length} categor${pick.length > 1 ? 'ies' : 'y'}: ${pick.map((c: { name: string }) => c.name).join(', ')}${moved ? `\n${moved} businesses will move to "Other".` : '\nThey have no businesses.'}`, label: 'Yes, delete' },
+        ctx
+      )
+    }
+  },
+  delete_businesses: {
+    args: '{"category"?: string, "country"?: string, "city"?: string, "text"?: string, "has_email"?: boolean, "has_website"?: boolean}',
+    desc: 'Delete saved businesses matching a filter (at least one filter). Asks for approval.',
+    run: (a, ctx) => {
+      const f: LeadFilter = {}
+      if (a.category) f.categoryIds = [categoryOrThrow(a.category).id]
+      if (a.country) f.countries = [norm(a.country)]
+      if (a.city) f.cities = [norm(a.city)]
+      if (a.text) f.search = norm(a.text)
+      if (typeof a.has_email === 'boolean') f.hasEmail = a.has_email
+      if (typeof a.has_website === 'boolean') f.hasWebsite = a.has_website
+      if (!Object.keys(f).length) throw new Error('Give at least one filter (category, city, …) — I never delete everything this way.')
+      const ids = leads.leadIdsForFilter(f)
+      if (!ids.length) return { ok: false, problem: 'No businesses match.' }
+      const names = db().all<{ business_name: string }>(`SELECT business_name FROM leads WHERE id IN (${ids.slice(0, 5).join(',')})`).map((r) => r.business_name)
+      return requestApproval({ kind: 'delete_leads', ids, summary: `Delete ${ids.length} businesses (${names.join(', ')}${ids.length > 5 ? '…' : ''}).`, label: 'Yes, delete' }, ctx)
     }
   },
   campaigns_status: {
@@ -459,12 +571,40 @@ Return JSON {"subject": string, "body": string}`,
   }
 }
 
-/** Starts the campaign waiting for approval (Approve button or a confirmed chat turn). */
-function startPending() {
+/** A readable line for an action needing approval (names instead of ids where possible). */
+async function describeCall(channel: string, args: unknown[]): Promise<string> {
+  const id = Number(args[0])
+  const name = (sql: string) => (Number.isFinite(id) ? db().get<{ n: string }>(sql, id)?.n : undefined)
+  const who =
+    channel.startsWith('campaigns:') ? name('SELECT name n FROM campaigns WHERE id = ?')
+    : channel.startsWith('smtp:') ? name('SELECT from_email n FROM smtp_accounts WHERE id = ?')
+    : channel.startsWith('whatsapp:') ? name('SELECT label n FROM whatsapp_accounts WHERE id = ?')
+    : channel.startsWith('templates:') ? name('SELECT name n FROM email_templates WHERE id = ?')
+    : channel === 'leads:deleteCategory' ? name('SELECT name n FROM lead_categories WHERE id = ?')
+    : channel.startsWith('conversations:') ? name('SELECT address n FROM conversations WHERE id = ?')
+    : Array.isArray(args[0]) ? `${(args[0] as unknown[]).length} items`
+    : undefined
+  const extra = channel === 'conversations:send' ? `Message: “${String(args[1] ?? '').slice(0, 300)}”` : channel === 'agent:approve' && args[1] ? `Text: “${String(args[1]).slice(0, 300)}”` : ''
+  return [who && `Target: ${who}`, extra].filter(Boolean).join('\n')
+}
+
+/** Runs the action waiting for approval (Approve button or a confirmed chat turn). */
+async function runPending(): Promise<any> {
   const p = memory().pending
-  if (!p) throw new Error('No campaign is waiting for approval.')
-  const r = campaigns.launchEmailCampaign(p.input)
+  if (!p) throw new Error('Nothing is waiting for approval.')
   remember({ pending: null })
+  if (p.kind === 'call') return { done: true, action: p.channel, result: compact(await invoke(p.channel, p.args)) }
+  if (p.kind === 'delete_categories') {
+    for (const id of p.ids) leads.deleteCategory(id)
+    bus.publish('leads:changed', {})
+    return { done: true, deleted_categories: p.ids.length }
+  }
+  if (p.kind === 'delete_leads') {
+    const n = leads.deleteLeads(p.ids, false)
+    bus.publish('leads:changed', {})
+    return { done: true, deleted_businesses: n }
+  }
+  const r = campaigns.launchEmailCampaign(p.input)
   return {
     started: !r.scheduled,
     scheduled: r.scheduled,
@@ -485,7 +625,7 @@ Today: ${new Date().toISOString().slice(0, 16)} (user's local offset ${-new Date
 TOOLS (call them to act; you cannot do anything without them):
 ${Object.entries(TOOLS).map(([k, t]) => `- ${k} ${t.args}: ${t.desc}`).join('\n')}
 
-MEMORY (from earlier in the chat): ${JSON.stringify({ category: m.categoryName ?? null, last_search_id: m.searchId ?? null, campaign_waiting_for_approval: m.pending?.summary ?? null })}
+MEMORY (from earlier in the chat): ${JSON.stringify({ category: m.categoryName ?? null, last_search_id: m.searchId ?? null, waiting_for_approval: m.pending?.summary ?? null })}
 
 RULES
 - Reply in the user's language and style: Roman Urdu if they write Roman Urdu, English if English. Keep replies short and friendly, simple words, no technical jargon, no markdown headings. Short lists are fine.
@@ -493,7 +633,9 @@ RULES
 - Ask only for information that is really missing (e.g. which account when several exist). Use memory for "this category", "these leads", etc.
 - "Search X in Y and save in Z" → maps_search(keyword X, location Y, category Z). The search runs in the background: tell the user it started and that they can watch progress; do not wait for it.
 - "Find emails for category" → find_emails. Never invent or guess email addresses.
-- Campaigns: always prepare_campaign first and show its summary; it is sent only after the user approves (they may click Approve or say yes). Call confirm_campaign only when the user's newest message is a clear yes to that summary.
+- Campaigns: always prepare_campaign first and show its summary; it is sent only after the user approves (they may click Approve or say yes). Call confirm_action only when the user's newest message is a clear yes to the summary waiting for approval.
+- You control the WHOLE app. For anything without a dedicated tool (delete/edit leads, settings, company info, signature, templates, WhatsApp, accounts, conversations, approvals, verification, do-not-contact list…): call capabilities(area) to see the exact actions, then app_call. Never tell the user to do it by hand or that it is impossible before checking capabilities, and never guess where a button is.
+- Deletes, removals, sending messages and other risky actions always show an approval summary first; then wait for the user's yes.
 - Email accounts: the user may type the email + app password in chat — the app adds the account locally and hides the password before you see it (you will see the result as a tool note). Or offer add_email_account (form button). Never ask the user to repeat a password and never write one.
 - Never invent prices, promises or facts about the user's business.
 - Never write a campaign summary or ask "approve?" yourself — only prepare_campaign creates a campaign summary. Every number you state must come from a tool result.
@@ -501,7 +643,9 @@ RULES
 
 EXAMPLES
 User: "Start an email campaign for Shoes" → {"say": "", "calls": [{"tool": "prepare_campaign", "args_json": "{\\"categories\\": [\\"Shoes\\"]}"}]} → then show the summary from the result and ask for approval.
-User: "haan start kr do" (after a summary) → {"say": "", "calls": [{"tool": "confirm_campaign", "args_json": "{}"}]}
+User: "haan start kr do" (after a summary) → {"say": "", "calls": [{"tool": "confirm_action", "args_json": "{}"}]}
+User: "khali categories delete kro" → {"say": "", "calls": [{"tool": "delete_categories", "args_json": "{\\"categories\\": \\"empty\\"}"}]}
+User: "signature change kro: Ali, Automas" → capabilities {"area":"settings"} → app_call {"action":"settings:update","args":[{"company":{"signature":"Ali, Automas"}}]}
 User: "Shoes ki emails dhundo" → {"say": "", "calls": [{"tool": "find_emails", "args_json": "{\\"category\\": \\"Shoes\\"}"}]}
 
 OUTPUT: one JSON object only:
@@ -537,7 +681,7 @@ function cleanResult(r: any) {
 /** Removes internal tool names the model sometimes mentions ("use search_status") from what the user sees. */
 const PLAIN: Record<string, string> = {
   search_status: 'progress', category_details: 'category details', campaigns_status: 'campaign progress', pending_replies: 'pending replies',
-  find_emails: 'email finder', prepare_campaign: 'campaign setup', confirm_campaign: 'approval', list_categories: 'categories', find_businesses: 'business list'
+  find_emails: 'email finder', prepare_campaign: 'campaign setup', confirm_action: 'approval', list_categories: 'categories', find_businesses: 'business list'
 }
 export function plain(text: string): string {
   return norm(text)
@@ -597,7 +741,8 @@ export function readReply(raw: any): { say: string; calls: { tool: string; args:
 /** Short, clear text for AI provider errors (rate limits, bad keys, network). */
 export function friendlyError(e: any): string {
   const m = String(e?.message ?? e)
-  const wait = /try again in ([\dhms.]+)/i.exec(m)?.[1]?.replace(/\.\d+s/, 's').replace(/\.+$/, '')
+  const ms = retryAfterMs(m)
+  const wait = ms ? (ms < 1000 ? 'a second' : ms < 60_000 ? `${Math.ceil(ms / 1000)}s` : `${Math.floor(ms / 60_000)}m ${Math.floor((ms % 60_000) / 1000)}s`) : null
   if (/tokens per day|TPD|quota|insufficient_quota|billing/i.test(m)) return `The AI provider's daily limit is used up${wait ? ` — it resets in about ${wait}` : ''}. Try later, upgrade the plan, or pick another model/provider in AI settings.`
   if (/429|rate limit/i.test(m)) return `The AI provider is busy (rate limit)${wait ? ` — try again in ${wait}` : ''}.`
   if (/401|invalid api key|invalid_api_key|authentication/i.test(m)) return 'The AI key was rejected. Check it in AI settings.'
@@ -657,6 +802,39 @@ function scrubStoredSecrets(): void {
   }
 }
 
+const ROMAN_URDU = /\b(kro|karo|kr|kar|krdo|kardo|hai|hain|ha|ka|ki|ke|mein|mai|ma|nahi|nhi|aur|yeh|ye|wo|kya|kaise|kitne|kitni|sab|sari|sare|dikhao|batao|bhejo|chahiye|chiya|haan|han|jo|unko|isko|mera|meri|apna)\b/gi
+/** Tells the model which language to answer in for this turn (Roman Urdu is easy to miss). */
+function langHint(text: string): string {
+  const hits = text.match(ROMAN_URDU)?.length ?? 0
+  return hits >= 2 ? '\n\nTHIS TURN: the user wrote Roman Urdu — your "say" MUST be in Roman Urdu (Urdu in Latin letters), not English.' : ''
+}
+
+/** Parses "try again in 1m2.5s" / "4.2s" / "480ms" from a provider error. */
+export function retryAfterMs(message: string): number {
+  const m = /try again in (?:(\d+)m(?!s))?(?:([\d.]+)(ms|s))?/i.exec(message)
+  if (!m || (!m[1] && !m[2])) return 0
+  return Number(m[1] ?? 0) * 60_000 + (m[2] ? Number(m[2]) * (m[3] === 'ms' ? 1 : 1000) : 0)
+}
+
+/** Model call that waits and retries once when the provider asks to wait a short time (per-minute limits). */
+async function callModel(req: Parameters<typeof generateJson>[0], signal: AbortSignal): Promise<any> {
+  try {
+    return await generateJson<any>(req)
+  } catch (e: any) {
+    const waitMs = retryAfterMs(String(e?.message))
+    if (!waitMs || waitMs > 65_000 || signal.aborted) throw e
+    bus.publish('assistant:waiting', { seconds: Math.ceil(waitMs / 1000) })
+    await new Promise((r) => setTimeout(r, waitMs + 500))
+    if (signal.aborted) throw new Error('Stopped.')
+    return generateJson<any>(req)
+  }
+}
+
+const TOOL_WORDS: Record<string, string> = {
+  maps_search: 'Google Maps search started', find_emails: 'Email finder queued', create_category: 'Category created', app_call: 'Action done',
+  confirm_action: 'Approved action done', prepare_campaign: 'Campaign prepared', delete_categories: 'Delete prepared', capabilities: 'Looked up options'
+}
+
 /** Handles one user message: runs tools until the model gives a final answer. */
 export async function ask(text: string): Promise<void> {
   const msg = norm(text)
@@ -698,26 +876,27 @@ export async function ask(text: string): Promise<void> {
   running = { ctl }
   bus.publish('assistant:busy', { busy: true })
   const buttons: Button[] = []
+  const done: { tool: string; ok: boolean; note?: string }[] = []
   try {
     const convo = history()
     let usedTools = false
     let guardRetries = 0
     for (let step = 0; step < 8; step++) {
       if (ctl.signal.aborted) throw new Error('Stopped.')
-      const raw = await generateJson<any>({ purpose: 'assistant', system: systemPrompt(), messages: convo, maxTokens: 400, schema: replySchema() })
+      const raw = await callModel({ purpose: 'assistant', system: systemPrompt() + langHint(msg), messages: convo, maxTokens: 400, schema: replySchema() }, ctl.signal)
       if (process.env.LGE_DEBUG_ASSISTANT) console.error('RAW', new Date().toISOString().slice(11, 19), raw._meta?.inputTokens, raw._meta?.outputTokens, raw._meta?.text)
       let r = readReply(raw)
       if (ctl.signal.aborted) throw new Error('Stopped.')
       if (!r.calls.length && !r.say) {
         // Empty answer: ask once more, explicitly.
         r = readReply(
-          await generateJson<any>({
+          await callModel({
             purpose: 'assistant',
-            system: systemPrompt(),
+            system: systemPrompt() + langHint(msg),
             messages: [...convo, { role: 'assistant', content: '{}' }, { role: 'user', content: 'Your answer was empty. Do what I asked: return {"say": ..., "calls": [...]} with the tool calls needed, or the final answer.' }],
             maxTokens: 400,
             schema: replySchema()
-          })
+          }, ctl.signal)
         )
       }
       if (ctl.signal.aborted) throw new Error('Stopped.')
@@ -727,7 +906,7 @@ export async function ask(text: string): Promise<void> {
         convo.push({ role: 'assistant', content: JSON.stringify({ say: r.say, calls: [] }) })
         convo.push({
           role: 'user',
-          content: 'You called no tool in this turn, yet your answer says something was done or asks for approval. That is not allowed. If my message asks for an action (or approves a prepared campaign → confirm_campaign), call the tool now. Otherwise answer again without claiming any action.'
+          content: 'You called no tool in this turn, yet your answer says something was done or asks for approval. That is not allowed. If my message asks for an action (or approves something waiting for approval → confirm_action), call the tool now. Otherwise answer again without claiming any action.'
         })
         continue
       }
@@ -750,6 +929,7 @@ export async function ask(text: string): Promise<void> {
           log.warn(`Tool ${c.tool} failed: ${e.message}`)
         }
         results.push(entry)
+        done.push({ tool: c.tool, ok: entry.ok, note: entry.ok ? (entry.result?.awaiting_user_approval ? 'waiting for your approval' : undefined) : entry.error ?? entry.result?.problem })
         addMessage('tool', `${c.tool}: ${entry.ok ? 'ok' : entry.error ?? 'not done'}`, entry)
       }
       convo.push({ role: 'assistant', content: JSON.stringify({ say: r.say ?? '', calls }) })
@@ -757,7 +937,12 @@ export async function ask(text: string): Promise<void> {
     }
     addMessage('assistant', 'I stopped here to avoid running too many steps. Tell me what to do next.', buttons.length ? { buttons } : undefined)
   } catch (e: any) {
-    addMessage('assistant', e.message === 'Stopped.' ? 'Stopped.' : friendlyError(e), { error: true, buttons: /429|rate limit|quota/i.test(e.message) ? [{ label: 'AI settings', page: 'agent' }] : undefined })
+    // Actions that already ran in this turn are reported even when the AI could not write the final answer.
+    const ran = done
+    const recap = ran.length
+      ? `\n\nWhat already happened:\n${ran.map((d) => `${d.ok ? '✓' : '✗'} ${TOOL_WORDS[d.tool] ?? d.tool.replace(/_/g, ' ')}${d.note ? ` — ${d.note}` : ''}`).join('\n')}`
+      : ''
+    addMessage('assistant', (e.message === 'Stopped.' ? 'Stopped.' : friendlyError(e)) + recap, { error: true, buttons: /429|rate limit|quota/i.test(e.message) ? [{ label: 'AI settings', page: 'agent' }] : undefined })
   } finally {
     running = null
     bus.publish('assistant:busy', { busy: false })
@@ -769,19 +954,24 @@ export function stop(): void {
 }
 
 /** Approve / cancel buttons on a prepared campaign. */
-export function confirmPending(): void {
-  if (!memory().pending) throw new Error('Nothing is waiting for approval.')
+export async function confirmPending(): Promise<void> {
+  const p = memory().pending
+  if (!p) throw new Error('Nothing is waiting for approval.')
   addMessage('user', 'Approved ✓')
   try {
-    const r = startPending()
-    addMessage('assistant', r.scheduled ? `Scheduled. ${r.recipients} businesses will be emailed.` : `Campaign started — ${r.recipients} businesses will be emailed, one every few minutes. I’ll show progress here.`, { buttons: [r._button] })
+    const r = await runPending()
+    if (p.kind === 'campaign')
+      addMessage('assistant', r.scheduled ? `Scheduled. ${r.recipients} businesses will be emailed.` : `Campaign started — ${r.recipients} businesses will be emailed, one every few minutes. No email has gone out yet; I’ll show progress here.`, { buttons: [r._button] })
+    else if (p.kind === 'delete_categories') addMessage('assistant', `Done — ${r.deleted_categories} categor${r.deleted_categories > 1 ? 'ies' : 'y'} deleted.`)
+    else if (p.kind === 'delete_leads') addMessage('assistant', `Done — ${r.deleted_businesses} businesses deleted.`)
+    else addMessage('assistant', 'Done ✓')
   } catch (e: any) {
-    addMessage('assistant', `Could not start the campaign: ${e.message}`, { error: true })
+    addMessage('assistant', `Could not do it: ${e.message}`, { error: true })
   }
 }
 export function cancelPending(): void {
   remember({ pending: null })
-  addMessage('assistant', 'Okay, the campaign was not started.')
+  addMessage('assistant', 'Okay, cancelled — nothing was changed.')
 }
 
 /** Live status shown above the chat input: running search, email finder, running campaigns. */

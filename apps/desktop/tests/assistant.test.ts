@@ -76,9 +76,9 @@ describe('AI assistant tools', () => {
     const p: any = await A.runToolForTests('prepare_campaign', { categories: ['Shoes'], templates: ['shoes offer'] }, 5)
     expect(p).toMatchObject({ ready: true, awaiting_user_approval: true })
     expect(p.summary).toContain('ali@company.test')
-    await expect(async () => A.runToolForTests('confirm_campaign', {}, 5)).rejects.toThrow(/not approved/)
+    await expect(async () => A.runToolForTests('confirm_action', {}, 5)).rejects.toThrow(/not approved/)
     expect(db().get<any>('SELECT COUNT(*) n FROM campaigns').n).toBe(0)
-    const c: any = await A.runToolForTests('confirm_campaign', {}, 6)
+    const c: any = await A.runToolForTests('confirm_action', {}, 6)
     expect(c).toMatchObject({ started: true, recipients: 1 })
     expect(A.memory().pending).toBeNull()
     const s: any = await A.runToolForTests('campaign_control', { action: 'pause' })
@@ -133,7 +133,7 @@ describe('assistant wording', () => {
 describe('assistant errors', () => {
   it('explains provider limits in plain words', () => {
     expect(A.friendlyError(new Error('429 Rate limit reached ... tokens per day (TPD): Limit 200000. Please try again in 8m59.568s. Need more'))).toBe(
-      "The AI provider's daily limit is used up — it resets in about 8m59s. Try later, upgrade the plan, or pick another model/provider in AI settings."
+      "The AI provider's daily limit is used up — it resets in about 8m 59s. Try later, upgrade the plan, or pick another model/provider in AI settings."
     )
     expect(A.friendlyError(new Error('401 Invalid API Key'))).toMatch(/rejected/)
   })
@@ -190,5 +190,96 @@ describe('email account typed in chat', () => {
     expect(sent).not.toContain('qwertyuiopasdfgh')
     expect(sent).toContain('Shoes')
     expect(A.listMessages().some((m) => m.data?.tool === 'assign_account_to_category' && m.data.ok)).toBe(true)
+  })
+})
+
+describe('full app control', () => {
+  beforeEach(async () => {
+    freshDb()
+    script.length = 0
+    const { getSettings, updateSettings } = await import('../src/main/core/settings')
+    const leads = await import('../src/main/services/leads')
+    const calls: Record<string, (...a: any[]) => any> = {
+      'settings:get': () => getSettings(),
+      'settings:update': (p: any) => updateSettings(p),
+      'leads:categories': () => leads.listCategories(),
+      'leads:deleteCategory': (id: number) => leads.deleteCategory(id)
+    }
+    A.setAppInvoker(async (ch, args) => calls[ch](...args))
+  })
+
+  it('deletes empty categories only after approval in a later message', async () => {
+    db().run("INSERT INTO lead_categories (name) VALUES ('Empty One'), ('Empty Two'), ('Busy')")
+    upsertLead({ business_name: 'X', source: 'manual', category: 'Busy' })
+    const before = db().get<any>('SELECT COUNT(*) n FROM lead_categories').n
+    const p: any = await A.runToolForTests('delete_categories', { categories: 'empty' }, 3)
+    expect(p.awaiting_user_approval).toBe(true)
+    expect(p.summary).toContain('Empty One')
+    expect(p.summary).not.toContain('Busy')
+    expect(db().get<any>('SELECT COUNT(*) n FROM lead_categories').n).toBe(before)
+    await expect(async () => A.runToolForTests('confirm_action', {}, 3)).rejects.toThrow(/not approved/)
+    const r: any = await A.runToolForTests('confirm_action', {}, 4)
+    expect(r.deleted_categories).toBeGreaterThanOrEqual(2)
+    expect(db().get<any>("SELECT COUNT(*) n FROM lead_categories WHERE name LIKE 'Empty%'").n).toBe(0)
+    expect(db().get<any>("SELECT COUNT(*) n FROM lead_categories WHERE name = 'Busy'").n).toBe(1)
+  })
+
+  it('reads capabilities and runs safe actions directly, risky ones only after approval', async () => {
+    const cap: any = await A.runToolForTests('capabilities', { area: 'settings' })
+    expect(cap.actions.map((x: any) => x.action)).toContain('settings:update')
+    const r: any = await A.runToolForTests('app_call', { action: 'settings:update', args: [{ company: { signature: 'Ali — Automas' } }] })
+    expect(r.ok).toBe(true)
+    const { getSettings } = await import('../src/main/core/settings')
+    expect(getSettings().company.signature).toBe('Ali — Automas')
+    db().run("INSERT INTO lead_categories (id, name) VALUES (77, 'Temp')")
+    const p: any = await A.runToolForTests('app_call', { action: 'leads:deleteCategory', args: [77] }, 9)
+    expect(p.awaiting_user_approval).toBe(true)
+    expect(p.summary).toContain('Temp')
+    expect(db().get<any>('SELECT COUNT(*) n FROM lead_categories WHERE id = 77').n).toBe(1)
+    await A.confirmPending()
+    expect(db().get<any>('SELECT COUNT(*) n FROM lead_categories WHERE id = 77').n).toBe(0)
+    await expect(async () => A.runToolForTests('app_call', { action: 'secrets:set', args: ['x', 'y'] })).rejects.toThrow(/not an allowed action/)
+  })
+
+  it('refuses to delete businesses without a filter', async () => {
+    await expect(async () => A.runToolForTests('delete_businesses', {})).rejects.toThrow(/at least one filter/)
+  })
+})
+
+describe('app_call argument shapes', () => {
+  it('accepts {action, patch} and explains missing args', async () => {
+    freshDb()
+    const { getSettings, updateSettings } = await import('../src/main/core/settings')
+    A.setAppInvoker(async (ch, args) => (ch === 'settings:update' ? updateSettings(args[0] as any) : getSettings()))
+    await A.runToolForTests('app_call', { action: 'settings:update', patch: { company: { senderName: 'Ali' } } })
+    expect(getSettings().company.senderName).toBe('Ali')
+    await expect(async () => A.runToolForTests('app_call', { action: 'settings:update' })).rejects.toThrow(/needs args \[patch\]/)
+    await expect(async () => A.runToolForTests('app_call', { patch: {} })).rejects.toThrow(/Missing "action"/)
+  })
+})
+
+describe('provider wait times', () => {
+  it('reads seconds, minutes and milliseconds', () => {
+    expect(A.retryAfterMs('Please try again in 480ms. Need more')).toBe(480)
+    expect(A.retryAfterMs('Please try again in 4.5s.')).toBe(4500)
+    expect(A.retryAfterMs('Please try again in 8m59.568s.')).toBeCloseTo(539568)
+    expect(A.retryAfterMs('no hint')).toBe(0)
+  })
+})
+
+describe('when the AI fails after acting', () => {
+  it('still tells the user what already happened', async () => {
+    freshDb()
+    script.length = 0
+    const { generateJson } = await import('../src/main/services/ai/providers')
+    script.push({ say: '', calls: [{ tool: 'create_category', args: { name: 'Bags' } }] })
+    ;(generateJson as any).mockImplementationOnce(async () => script.shift()).mockImplementationOnce(async () => {
+      throw new Error('429 Rate limit reached ... tokens per day (TPD). Please try again in 9m1s.')
+    })
+    await A.ask('Bags category banao')
+    const last = A.listMessages().at(-1)!
+    expect(last.content).toMatch(/daily limit/)
+    expect(last.content).toMatch(/✓ Category created/)
+    expect(db().get<any>("SELECT COUNT(*) n FROM lead_categories WHERE name = 'Bags'").n).toBe(1)
   })
 })

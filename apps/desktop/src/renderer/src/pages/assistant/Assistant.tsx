@@ -31,7 +31,11 @@ const TOOL_LABEL: Record<string, string> = {
   list_templates: 'Read templates',
   write_template: 'Wrote a template',
   prepare_campaign: 'Prepared campaign',
-  confirm_campaign: 'Started campaign',
+  confirm_action: 'Approved action',
+  capabilities: 'Looked up options',
+  app_call: 'Action',
+  delete_categories: 'Delete categories',
+  delete_businesses: 'Delete businesses',
   campaigns_status: 'Checked campaigns',
   campaign_control: 'Campaign',
   pending_replies: 'Checked replies',
@@ -219,8 +223,15 @@ function toolDetail(d: any): string | null {
       return r.saved_template
     case 'prepare_campaign':
       return r.ready ? 'waiting for your approval' : r.problem
-    case 'confirm_campaign':
-      return `${fmtNum(r.recipients)} businesses`
+    case 'confirm_action':
+      return r.recipients != null ? `${fmtNum(r.recipients)} businesses` : r.deleted_categories != null ? `${r.deleted_categories} deleted` : r.deleted_businesses != null ? `${fmtNum(r.deleted_businesses)} deleted` : 'done'
+    case 'capabilities':
+      return r.area
+    case 'app_call':
+      return r.awaiting_user_approval ? 'waiting for your approval' : String(d.args?.action ?? '').replace(':', ' → ')
+    case 'delete_categories':
+    case 'delete_businesses':
+      return r.ready ? 'waiting for your approval' : r.problem
     case 'campaign_control':
       return `${r.campaign}: ${r.status}`
     case 'assign_account_to_category':
