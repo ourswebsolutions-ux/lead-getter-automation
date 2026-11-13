@@ -10,6 +10,7 @@ import * as templates from '../templates'
 import * as gmaps from '../maps'
 import { backgroundStatus } from '../maps/background'
 import { listApprovals } from './agent'
+import { addEmailAccount } from '../emailAutoConfig'
 import type { LeadFilter } from '@shared/types'
 
 /**
@@ -306,7 +307,7 @@ const TOOLS: Record<string, Tool> = {
   },
   add_email_account: {
     args: '{}',
-    desc: 'Show the secure Add-account form button (never ask passwords).',
+    desc: 'Show the Add-account form button. (If the user types email + password in chat, the app adds the account itself before you see the message.)',
     run: () => ({ ok: true, _button: { label: 'Add email account', page: 'email-accounts', params: { add: true } } })
   },
   assign_account_to_category: {
@@ -493,7 +494,7 @@ RULES
 - "Search X in Y and save in Z" → maps_search(keyword X, location Y, category Z). The search runs in the background: tell the user it started and that they can watch progress; do not wait for it.
 - "Find emails for category" → find_emails. Never invent or guess email addresses.
 - Campaigns: always prepare_campaign first and show its summary; it is sent only after the user approves (they may click Approve or say yes). Call confirm_campaign only when the user's newest message is a clear yes to that summary.
-- Never ask for or repeat passwords; to add an email account use add_email_account (it shows a secure form button).
+- Email accounts: the user may type the email + app password in chat — the app adds the account locally and hides the password before you see it (you will see the result as a tool note). Or offer add_email_account (form button). Never ask the user to repeat a password and never write one.
 - Never invent prices, promises or facts about the user's business.
 - Never write a campaign summary or ask "approve?" yourself — only prepare_campaign creates a campaign summary. Every number you state must come from a tool result.
 - Never mention tool names (like search_status) to the user; say it in plain words ("I can check progress for you").
@@ -604,12 +605,89 @@ export function friendlyError(e: any): string {
   return `Something went wrong: ${m.slice(0, 200)}`
 }
 
+// ---------------------------------------------------------------- credentials typed in chat
+
+const MASK = '••••••••'
+const EMAIL_RE = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i
+const KEYED_PW_RE = /["']?(?:app[\s_-]?password|passw(?:or|ro)?d|passowrd|pass|pwd)["']?\s*(?:[:=]|is|hai|he)?\s*["']?((?:[a-z]{4}\s){3}[a-z]{4}|[^\s"',]{6,64})["']?/i
+const GMAIL_APP_PW_RE = /\b([a-z]{16})\b/
+
+/**
+ * Finds an email account + password typed in the chat ("username": "x@gmail.com", "password": "...",
+ * or an email next to a 16-letter Gmail app password). Returns the details and the text with the password masked.
+ */
+export function extractCredentials(text: string): { email: string; password: string; host?: string; port?: number; redacted: string } | null {
+  const email = EMAIL_RE.exec(text)?.[0]
+  if (!email) return null
+  const keyed = KEYED_PW_RE.exec(text)
+  let password = keyed?.[1]
+  if (password && (password.includes('@') || /^(for|to|and|of|the|ka|ki|ke)$/i.test(password))) password = undefined
+  password ??= GMAIL_APP_PW_RE.exec(text.replace(email, ''))?.[1]
+  if (!password) return null
+  const host = /\b((?:smtp|mail|smtpout|smtppro)[a-z0-9-]*\.[a-z0-9.-]+\.[a-z]{2,})\b/i.exec(text)?.[1]
+  const port = Number(/\bport\D{0,4}(\d{2,5})\b/i.exec(text)?.[1] ?? /\b(465|587|25|2525)\b/.exec(text)?.[1]) || undefined
+  const redacted = text.split(password).join(MASK)
+  return { email: email.toLowerCase(), password: password.replace(/\s+/g, ''), host, port, redacted }
+}
+
+/** True when, besides the credentials, the message asks for something else (e.g. "and use it for Shoes"). */
+function hasOtherRequest(c: { email: string; redacted: string }): boolean {
+  const rest = c.redacted
+    .replace(EMAIL_RE, ' ')
+    .split(MASK)
+    .join(' ')
+    .replace(/["'{}:,=()[\].]+/g, ' ')
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w && !STOP.has(w) && !/^\d+$/.test(w) && !/^(smtp|mail)/.test(w))
+  return rest.length > 1
+}
+const STOP = new Set(
+  'add this these the in on to my me is it a an and or with of for email emails mail account accounts smtp app password passowrd pass pwd username user name port server gmail kro karo kar krdo kardo do mein me ma mai ye yeh isko isay is ka ki ke hai he please plz pls you'.split(' ')
+)
+
+let scrubbed = false
+/** Masks passwords in chat messages saved before credentials were handled locally. */
+function scrubStoredSecrets(): void {
+  if (scrubbed) return
+  scrubbed = true
+  for (const m of db().all<{ id: number; content: string }>("SELECT id, content FROM assistant_messages WHERE role = 'user'")) {
+    const c = extractCredentials(m.content)
+    if (c && c.redacted !== m.content) db().run('UPDATE assistant_messages SET content = ? WHERE id = ?', c.redacted, m.id)
+  }
+}
+
 /** Handles one user message: runs tools until the model gives a final answer. */
 export async function ask(text: string): Promise<void> {
   const msg = norm(text)
   if (!msg) return
   if (running) throw new Error('Still working on your last message — wait a moment or press Stop.')
-  const userMessageId = addMessage('user', msg)
+  scrubStoredSecrets()
+  const cred = extractCredentials(msg)
+  // The password never reaches the AI provider or the chat history: it is masked before anything is stored or sent.
+  const userMessageId = addMessage('user', cred ? cred.redacted : msg)
+  if (cred) {
+    running = { ctl: new AbortController() }
+    bus.publish('assistant:busy', { busy: true })
+    let line: string
+    try {
+      const existing = db().get<{ id: number }>('SELECT id FROM smtp_accounts WHERE from_email = ? COLLATE NOCASE', cred.email)
+      const r = await addEmailAccount({ id: existing?.id, email: cred.email, password: cred.password, host: cred.host, port: cred.port })
+      email.forgetTransport(r.id)
+      addMessage('tool', 'add_email_account: ok', { tool: 'add_email_account', ok: true, args: { email: cred.email }, result: { account: cred.email, server: `${r.host}:${r.port}`, provider: r.provider } })
+      line = `Done — ${cred.email} ${existing ? 'password updated' : 'is added'} and the login works (${r.provider ?? r.host}, port ${r.port}). I hid the password in the chat.`
+    } catch (e: any) {
+      addMessage('tool', 'add_email_account: failed', { tool: 'add_email_account', ok: false, args: { email: cred.email }, error: e.message })
+      line = `Could not add ${cred.email}: ${e.message}`
+    } finally {
+      running = null
+      bus.publish('assistant:busy', { busy: false })
+    }
+    if (!hasOtherRequest(cred) || !aiConfigured()) {
+      addMessage('assistant', line, { buttons: [{ label: 'Open Email', page: 'email-accounts' }] })
+      return
+    }
+  }
   if (!aiConfigured()) {
     addMessage('assistant', 'AI is not set up yet. Add an AI key (Claude, OpenAI, Gemini or Groq) in AI Sales Agent → Providers, then ask me again.', {
       buttons: [{ label: 'Set up AI', page: 'agent' }]

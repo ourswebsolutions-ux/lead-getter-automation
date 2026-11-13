@@ -22,6 +22,17 @@ vi.mock('../src/main/services/maps', async () => {
   }
 })
 
+vi.mock('../src/main/services/emailAutoConfig', async () => {
+  const { db } = await import('../src/main/db')
+  return {
+    addEmailAccount: vi.fn(async (i: any) => {
+      if (i.password !== 'qwertyuiopasdfgh') throw new Error('Gmail rejected the password.')
+      const id = i.id ?? Number(db().run("INSERT INTO smtp_accounts (name, host, port, username, from_name, from_email, status) VALUES (?, 'smtp.gmail.com', 465, ?, 'x', ?, 'ok')", i.email, i.email, i.email).lastInsertRowid)
+      return { id, host: 'smtp.gmail.com', port: 465, secure: 'ssl', provider: 'Gmail' }
+    })
+  }
+})
+
 import * as A from '../src/main/services/ai/assistant'
 import * as T from '../src/main/services/templates'
 import { upsertLead } from '../src/main/services/leads'
@@ -125,5 +136,59 @@ describe('assistant errors', () => {
       "The AI provider's daily limit is used up — it resets in about 8m59s. Try later, upgrade the plan, or pick another model/provider in AI settings."
     )
     expect(A.friendlyError(new Error('401 Invalid API Key'))).toMatch(/rejected/)
+  })
+})
+
+describe('email account typed in chat', () => {
+  // Same shape as a real message from the user, with made-up values.
+  const PASTE = 'add this in smtp email and app passowrs   "username": "team.sales@gmail.com",\n            "password": "qwertyuiopasdfgh",'
+  beforeEach(() => {
+    freshDb()
+    script.length = 0
+  })
+
+  it('reads credentials in the forms people type them', () => {
+    expect(A.extractCredentials(PASTE)).toMatchObject({ email: 'team.sales@gmail.com', password: 'qwertyuiopasdfgh' })
+    expect(A.extractCredentials('mera gmail ali@gmail.com hai aur app password abcd efgh ijkl mnop')).toMatchObject({ password: 'abcdefghijklmnop' })
+    expect(A.extractCredentials('add sales@shop.pk qwertyuiopasdfgh')).toMatchObject({ email: 'sales@shop.pk', password: 'qwertyuiopasdfgh' })
+    expect(A.extractCredentials('add info@shop.pk password: S3cret!pass smtp.shop.pk port 587')).toMatchObject({ password: 'S3cret!pass', host: 'smtp.shop.pk', port: 587 })
+    expect(A.extractCredentials('send the campaign from ali@company.com for Shoes')).toBeNull()
+    expect(A.extractCredentials('Search shoes shops in Lahore')).toBeNull()
+    expect(A.extractCredentials(PASTE)!.redacted).not.toContain('qwertyuiopasdfgh')
+  })
+
+  it('adds the account locally, masks the password and never sends it to the AI', async () => {
+    const { generateJson } = await import('../src/main/services/ai/providers')
+    ;(generateJson as any).mockClear()
+    await A.ask(PASTE)
+    const msgs = A.listMessages()
+    expect(JSON.stringify(msgs)).not.toContain('qwertyuiopasdfgh')
+    expect(msgs[0].content).toContain('••••')
+    expect(msgs[1].data).toMatchObject({ tool: 'add_email_account', ok: true })
+    expect(msgs.at(-1)!.content).toMatch(/added/)
+    expect((generateJson as any).mock.calls.length).toBe(0)
+    expect(db().get<any>("SELECT COUNT(*) n FROM smtp_accounts WHERE from_email = 'team.sales@gmail.com'").n).toBe(1)
+    await A.ask(PASTE)
+    expect(A.listMessages().at(-1)!.content).toMatch(/password updated/)
+  })
+
+  it('reports a wrong password honestly and still hides it', async () => {
+    await A.ask('add team.sales@gmail.com password: wrongpassword1')
+    const msgs = A.listMessages()
+    expect(JSON.stringify(msgs)).not.toContain('wrongpassword1')
+    expect(msgs.at(-1)!.content).toMatch(/Could not add .*rejected/)
+  })
+
+  it('passes extra requests to the AI with the password masked', async () => {
+    const { generateJson } = await import('../src/main/services/ai/providers')
+    ;(generateJson as any).mockClear()
+    db().run("INSERT INTO lead_categories (name) VALUES ('Shoes')")
+    script.push({ say: '', calls: [{ tool: 'assign_account_to_category', args: { account: 'team.sales@gmail.com', categories: ['Shoes'] } }] })
+    script.push({ say: 'Account Shoes ke liye set ho gaya.', calls: [] })
+    await A.ask('team.sales@gmail.com password qwertyuiopasdfgh add kro aur isko Shoes campaigns ke liye use kro')
+    const sent = JSON.stringify((generateJson as any).mock.calls)
+    expect(sent).not.toContain('qwertyuiopasdfgh')
+    expect(sent).toContain('Shoes')
+    expect(A.listMessages().some((m) => m.data?.tool === 'assign_account_to_category' && m.data.ok)).toBe(true)
   })
 })
