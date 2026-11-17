@@ -57,7 +57,7 @@ export function splitList(s: string): string[] {
   return s.split(/[\n,;]+/).map((x) => x.trim()).filter(Boolean)
 }
 export const SOURCE_LABEL: Record<string, string> = {
-  google_maps: 'Google Maps', linkedin: 'LinkedIn', apollo: 'Apollo', website: 'Website', podcast: 'Podcast', import: 'Import', manual: 'Manual'
+  google_maps: 'Google Maps', linkedin: 'LinkedIn', apollo: 'Apollo', website: 'Website', podcast: 'Podcast', import: 'Import', manual: 'Manual', inbound: 'Inbound'
 }
 export const STATUS_LABEL: Record<string, string> = {
   new: 'New', contacted: 'Contacted', replied: 'Replied', interested: 'Interested', not_interested: 'Not interested', converted: 'Converted', do_not_contact: 'Do not contact'

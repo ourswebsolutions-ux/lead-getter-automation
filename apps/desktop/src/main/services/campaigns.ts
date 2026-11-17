@@ -522,3 +522,27 @@ export function launchEmailCampaign(input: EmailLaunchInput): { id: number; adde
     throw e
   }
 }
+
+/**
+ * The easy path: only categories are required. Missing accounts → the accounts assigned to those
+ * categories, else every working account. Missing templates → AI writes one per category (saved in
+ * Email Templates) and personalises every email from it.
+ */
+export async function launchEmailCampaignAuto(input: Partial<EmailLaunchInput> & { categoryIds: number[] }) {
+  if (!input.categoryIds?.length) throw new Error('Choose at least one category.')
+  let accountIds = input.accountIds ?? []
+  if (!accountIds.length) {
+    const assigned = [...new Set(input.categoryIds.flatMap((id) => email.accountsForCategory(id)))]
+    accountIds = assigned.length ? assigned : db().all<{ id: number }>("SELECT id FROM smtp_accounts WHERE enabled = 1 AND status != 'error' ORDER BY id").map((a) => a.id)
+  }
+  if (!accountIds.length) throw new Error('Add an email account first (Email → Add account).')
+  if (!emailAudienceCount(input.categoryIds)) throw new Error('No leads with a verified email in these categories yet.')
+  let templateIds = input.templateIds ?? []
+  let aiPersonalize = input.aiPersonalize
+  if (!templateIds.length) {
+    const { templatesForCategories } = await import('./ai/writer')
+    templateIds = await templatesForCategories(input.categoryIds, input.offer)
+    aiPersonalize ??= true
+  }
+  return launchEmailCampaign({ hours: { start: '09:00', end: '20:00' }, delayMinutes: 4, ...input, accountIds, templateIds, aiPersonalize: !!aiPersonalize } as EmailLaunchInput)
+}

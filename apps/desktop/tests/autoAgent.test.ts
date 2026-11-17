@@ -184,3 +184,52 @@ describe('email filters', () => {
     expect(isAutomatedEmail('ali@shop.com', h({}))).toBe(false)
   })
 })
+
+describe('new people writing in', () => {
+  beforeEach(() => setup())
+
+  it('answers a first message from someone new within minutes, ongoing chats after the normal delay', () => {
+    incoming('Hi, do you make websites?', '923331112222')
+    const due = Q.fromSql(db().get<any>('SELECT due_at FROM agent_queue').due_at).getTime() - Date.now()
+    expect(due / 60_000).toBeLessThan(5)
+  })
+
+  it('reads new emails: an inquiry becomes a lead and is queued; spam and automated mail are ignored', async () => {
+    db().run("INSERT INTO smtp_accounts (id, name, host, port, username, from_name, from_email, status) VALUES (1, 'A', 'h', 587, 'u', 'n', 'me@agency.test', 'ok')")
+    const headers = new Map()
+    reply = (req: any) => (req.purpose === 'inbound_triage' ? (/website/i.test(req.messages[0].content) ? { inquiry: true, kind: 'service_inquiry', name: 'Sara', business_name: 'Sara Boutique', need: 'Needs a website' } : { inquiry: false, kind: 'spam' }) : base)
+    const ok = await (await import('../src/main/services/email')).handleNewSender(1, 'sara@boutique.test', { headers, date: new Date(), from: { value: [{ name: 'Sara' }] } }, 'Website', 'Hi, I need a website for my boutique', 'm1')
+    expect(ok).toBe(true)
+    expect(db().get<any>("SELECT business_name, source FROM leads WHERE business_name = 'Sara Boutique'")).toMatchObject({ source: 'inbound' })
+    expect(db().get<any>("SELECT COUNT(*) n FROM agent_queue WHERE status = 'waiting'").n).toBe(1)
+    const E = await import('../src/main/services/email')
+    expect(await E.handleNewSender(1, 'promo@seo.test', { headers, date: new Date() }, 'Cheap SEO', 'Buy backlinks now', 'm2')).toBe(false)
+    expect(await E.handleNewSender(1, 'noreply@bank.test', { headers, date: new Date() }, 'Website', 'website statement', 'm3')).toBe(false)
+    expect(await E.handleNewSender(1, 'old@client.test', { headers, date: new Date(Date.now() - 2 * 86400_000) }, 'Website', 'website please', 'm4')).toBe(false)
+  })
+
+  it('turns a new WhatsApp customer into a lead', async () => {
+    reply = { ...base, customer_name: 'Hamza', customer_business: 'Hamza Mobiles' }
+    incoming('AoA, mobile shop ke liye website chahiye. Main Hamza, Hamza Mobiles se', '923451234567')
+    await Q.tick(later(10))
+    expect(db().get<any>("SELECT source, contact_name FROM leads WHERE business_name = 'Hamza Mobiles'")).toMatchObject({ source: 'inbound', contact_name: 'Hamza' })
+    expect(sent).toHaveLength(1)
+  })
+})
+
+describe('easy campaign', () => {
+  beforeEach(() => setup())
+  it('only needs categories: picks the account and lets AI write the template', async () => {
+    db().run("INSERT INTO smtp_accounts (id, name, host, port, username, from_name, from_email, status) VALUES (5, 'A', 'h', 587, 'u', 'n', 'me@agency.test', 'ok')")
+    db().run("INSERT INTO lead_categories (id, name) VALUES (300, 'Bags')")
+    db().run("UPDATE leads SET category_id = 300")
+    db().run("UPDATE email_addresses SET verification_status = 'safe'")
+    reply = (req: any) => (req.purpose === 'template' ? { subject: 'quick idea for {business_name}', body: '{Hi|Hello} {contact_name}, …' } : base)
+    const { launchEmailCampaignAuto, getCampaign } = await import('../src/main/services/campaigns')
+    const r = await launchEmailCampaignAuto({ categoryIds: [300] })
+    const c = getCampaign(r.id)
+    expect(c.config).toMatchObject({ accountIds: [5], aiPersonalize: true })
+    expect(c.steps[0].subject).toBe('quick idea for {business_name}')
+    expect(db().get<any>("SELECT name FROM email_templates").name).toBe('Bags — AI')
+  })
+})

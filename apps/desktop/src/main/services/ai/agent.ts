@@ -8,6 +8,7 @@ import { generate, generateJson, aiConfigured } from './providers'
 import { crawlSite } from '../sources/website'
 import { getConversation, onIncoming, sendInConversation, suppressEverywhere, type ConversationRow } from '../conversations'
 import { knowledgeBlock, hasPricingKnowledge, unknownAmounts } from '../knowledge'
+import { upsertLead, addHistory } from '../leads'
 import { enqueueReply, scheduleFollowUp, startAutoAgent } from './autoAgent'
 import * as wa from '../whatsapp'
 import type { PricingService } from '@shared/settings'
@@ -274,6 +275,8 @@ interface TurnAnalysis {
   needs_human: boolean
   human_reason: string
   follow_up_in_days: number | null
+  customer_name?: string | null
+  customer_business?: string | null
   reply: string
 }
 
@@ -359,7 +362,9 @@ Read the whole conversation and the customer's latest message, then return JSON:
  "requirements": updated structured memory (needs, budget_mentioned, timeline, decision_maker, objections, questions_open…),
  "needs_human": true if answering needs information that is NOT in the business information, a decision (discount, custom price, refund, contract, meeting time), or it is a complaint, payment dispute, legal or other sensitive matter,
  "human_reason": short reason when needs_human is true, else "",
- "follow_up_in_days": number of days to follow up if they asked to be contacted later or went quiet after showing interest, else null,
+ "follow_up_in_days": number of days to follow up if they asked to be contacted later or went quiet after showing interest, else null,${conv.lead_id ? '' : `
+ "customer_name": their name if they said it, else null,
+ "customer_business": their company/shop name if they said it, else null,`}
  "reply": your next message to the customer in their language (for needs_human: a natural holding reply, e.g. that you'll check and get back; for opt_out: "")}`,
       messages: transcript(convId)
     })
@@ -372,6 +377,17 @@ Read the whole conversation and the customer's latest message, then return JSON:
     if (conv.lead_id && (a.interest === 'interested' || a.interest === 'not_interested'))
       db().run("UPDATE leads SET outreach_status = ? WHERE id = ? AND outreach_status NOT IN ('converted','do_not_contact')", a.interest, conv.lead_id)
     logActivity('ai', 'agent_decision', 'conversation', convId, decision)
+    // A new person who is a real prospect/customer becomes a lead (so campaigns, categories and history work for them too).
+    if (!conv.lead_id && a.intent !== 'opt_out' && a.interest !== 'not_interested' && a.intent !== 'smalltalk') {
+      const lead = upsertLead({
+        business_name: a.customer_business || a.customer_name || (conv.channel === 'whatsapp' ? `+${conv.address}` : conv.address.split('@')[0]),
+        contact_name: a.customer_name ?? undefined,
+        source: 'inbound',
+        ...(conv.channel === 'whatsapp' ? { phone: `+${conv.address}` } : { emails: [{ email: conv.address }] })
+      } as any)
+      db().run('UPDATE conversations SET lead_id = ? WHERE id = ?', lead.id, convId)
+      addHistory(lead.id, 'inbound_inquiry', { channel: conv.channel, need: a.summary })
+    }
 
     if (a.intent === 'opt_out') {
       suppressEverywhere(convId, 'Asked not to be contacted')

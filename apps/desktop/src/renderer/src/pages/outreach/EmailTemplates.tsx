@@ -3,7 +3,7 @@ import { Plus, Search, Copy, Trash2, FileText, Save, Sparkles, Braces } from 'lu
 import { rpc, useAction, useQuery } from '../../lib/rpc'
 import { useNav } from '../../lib/nav'
 import { fmtRelative } from '../../lib/format'
-import { Button, EmptyState, Input, confirmDialog } from '../../components/ui'
+import { Button, EmptyState, Field, Input, Modal, Select, confirmDialog } from '../../components/ui'
 
 interface Tpl {
   id: number
@@ -62,6 +62,10 @@ export function EmailTemplatesPage() {
   const subjectRef = useRef<HTMLInputElement>(null)
   const bodyRef = useRef<HTMLTextAreaElement>(null)
   const { busy, run } = useAction()
+  const [aiOpen, setAiOpen] = useState(false)
+  const { data: cats } = useQuery<any[]>('leads:categories', [])
+  const [aiCat, setAiCat] = useState('')
+  const [aiOffer, setAiOffer] = useState('')
 
   // Open the first template when the page loads.
   useEffect(() => {
@@ -109,7 +113,8 @@ export function EmailTemplatesPage() {
           </div>
           <div className="row">
             <Button icon={<FileText size={14} />} onClick={() => go('email-campaigns')}>Campaigns</Button>
-            <Button variant="primary" icon={<Plus size={14} />} onClick={() => open({ name: '', subject: '', body: '' })}>New template</Button>
+            <Button icon={<Plus size={14} />} onClick={() => open({ name: '', subject: '', body: '' })}>New template</Button>
+            <Button variant="primary" icon={<Sparkles size={14} />} onClick={() => setAiOpen(true)}>Write with AI</Button>
           </div>
         </div>
 
@@ -219,6 +224,45 @@ export function EmailTemplatesPage() {
           )}
         </div>
       </div>
+      {aiOpen && (
+        <Modal
+          open
+          onClose={() => setAiOpen(false)}
+          title="Write a template with AI"
+          desc="Written from your saved business info, in a natural human style."
+          footer={
+            <>
+              <Button onClick={() => setAiOpen(false)}>Cancel</Button>
+              <Button
+                variant="primary"
+                icon={<Sparkles size={13} />}
+                loading={busy === 'ai'}
+                disabled={!aiCat}
+                onClick={() =>
+                  run('ai', () => rpc<any>('templates:writeAI', aiCat, aiOffer || undefined), { success: 'Template written' }).then((t) => {
+                    if (t) {
+                      setAiOpen(false)
+                      reload()
+                      open({ ...t, updated_at: '', used: 0 } as any)
+                    }
+                  })
+                }
+              >
+                {busy === 'ai' ? 'Writing…' : 'Write it'}
+              </Button>
+            </>
+          }
+        >
+          <div className="col gap-12">
+            <Field label="For which businesses?">
+              <Select value={aiCat} onChange={setAiCat} placeholder="Choose a category" options={(cats ?? []).map((c) => ({ value: c.name, label: c.name }))} />
+            </Field>
+            <Field label="What to offer (optional)">
+              <Input value={aiOffer} onChange={(e) => setAiOffer(e.target.value)} placeholder="e.g. website development" />
+            </Field>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

@@ -40,8 +40,10 @@ export interface AppSettings {
     timezone: string
     /** Complaints, payments, legal, refunds and anything uncertain wait for the owner even when auto-reply is on. */
     approveSensitive: boolean
-    /** Also answer emails from people who are not leads (customer support). Automated mail is always ignored. */
+    /** Watch every incoming email: messages from new people that look like a client or service inquiry become leads and get a quick reply. Automated mail is always ignored. */
     replyToUnknownEmail: boolean
+    /** New inquiries (first message from someone new) are answered faster than ongoing conversations. */
+    newInquiryDelayMinutes: number
     /** Mark WhatsApp messages as read when the agent answers them. */
     markWhatsAppRead: boolean
     outreachStrategy: string
@@ -88,7 +90,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
     workDays: [0, 1, 2, 3, 4, 5, 6],
     timezone: '',
     approveSensitive: true,
-    replyToUnknownEmail: false,
+    replyToUnknownEmail: true,
+    newInquiryDelayMinutes: 2,
     markWhatsAppRead: true,
     outreachStrategy:
       'Lead with one specific, relevant observation about their business. Offer value before asking for anything. Keep the first message under 90 words and end with a single low-pressure question.',

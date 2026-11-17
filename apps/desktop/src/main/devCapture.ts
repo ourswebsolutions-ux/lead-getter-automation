@@ -67,12 +67,19 @@ export function seedSampleData(): void {
   am('tool', 'prepare_campaign: ok', { tool: 'category_details', ok: true, result: { category: 'Shoes', businesses: 64, with_email: 38 } })
   am('tool', 'prepare_campaign: ok', { tool: 'prepare_campaign', ok: true, result: { ready: true } })
   am('assistant', 'Campaign tayyar hai:\n• Shoes: 64 businesses, 38 ke paas email, 31 verified ko email jayegi\n• From: sales@automas.example\n• Har business ke liye AI personalised email (website development offer)\n• Roz 9:00–20:00, har ~4 min mein ek email\n\nApprove karen to start kar doon?', { buttons: [{ label: 'Approve & start', action: 'confirm' }] })
+  db().run("INSERT INTO org_knowledge (topic, title, content) VALUES ('services', 'What we do', 'Websites, online stores, mobile apps and WhatsApp automation for small businesses.'), ('pricing', 'Website packages', 'Starter website Rs 35,000 (5 pages). Online store Rs 85,000. Monthly care plan Rs 5,000.'), ('hours', 'Office hours', 'Mon–Sat, 10am–7pm (Lahore).'), ('style', 'How we talk', 'Friendly and simple. Reply in Roman Urdu when the customer does.')")
+  db().run("INSERT INTO org_knowledge (topic, title, content, private) VALUES ('pricing', 'Lowest we accept', 'Never below Rs 30,000 for a website.', 1)")
+  const wc = getOrCreateConversation({ channel: 'whatsapp', address: '923001112233', accountId: null })
+  const m1 = recordMessage(wc.id, { direction: 'in', author: 'contact', body: 'AoA, online store kitne ka banega?' })
+  db().run("INSERT INTO agent_queue (conversation_id, kind, trigger_message_id, due_at, status) VALUES (?, 'reply', ?, datetime('now', '+23 minutes'), 'waiting')", wc.id, m1)
+  const m2 = recordMessage(conv.id, { direction: 'in', author: 'contact', body: 'Do you also do the menu photos?' })
+  db().run("INSERT INTO agent_queue (conversation_id, kind, trigger_message_id, due_at, status, reply, decision) VALUES (?, 'reply', ?, datetime('now'), 'sent', 'We don’t do photography ourselves, but we can add your photos and a clean menu layout. Do you have photos already?', ?)", conv.id, m2, JSON.stringify({ intent: 'question', language: 'English' }))
   const cid = createCampaign('whatsapp', 'Dubai restaurants — November', { accountIds: [] }, [{ kind: 'variant', body: 'Hi {contact_name}, I came across {business_name} in {city}…' }])
   addRecipients(cid, { filter: { cities: ['Dubai'] } })
 }
 
 export async function runCapture(dir: string): Promise<void> {
-  const pages = ['assistant', 'dashboard', 'leads', 'conversations', 'agent', 'maps', 'verification', 'wa-campaigns', 'email-accounts', 'email-templates', 'settings']
+  const pages = ['assistant', 'dashboard', 'leads', 'conversations', 'agent', 'maps', 'verification', 'wa-campaigns', 'email-accounts', 'email-templates', 'agent', 'settings']
   mkdirSync(dir, { recursive: true })
   const win = BrowserWindow.getAllWindows()[0]
   await new Promise((r) => setTimeout(r, 2500))
@@ -90,9 +97,14 @@ export async function runCapture(dir: string): Promise<void> {
   await new Promise((r) => setTimeout(r, 2500))
   await win.webContents.executeJavaScript(`[...document.querySelectorAll('button')].find((b) => b.textContent.includes('New campaign')).click(); true`)
   await new Promise((r) => setTimeout(r, 1200))
-  await win.webContents.executeJavaScript(`for (const g of document.querySelectorAll('.pick-group')) g.querySelector('.pick')?.click(); true`)
+  await win.webContents.executeJavaScript(`document.querySelector('.pick-group .pick')?.click(); true`)
   await new Promise((r) => setTimeout(r, 1200))
   writeFileSync(join(dir, 'dark-email-launch.png'), (await win.webContents.capturePage()).toPNG())
+  await win.webContents.executeJavaScript(`localStorage.setItem('lge.page', '"agent"'); location.reload(); true`)
+  await new Promise((r) => setTimeout(r, 2500))
+  await win.webContents.executeJavaScript(`[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Knowledge').click(); true`)
+  await new Promise((r) => setTimeout(r, 1200))
+  writeFileSync(join(dir, 'dark-knowledge.png'), (await win.webContents.capturePage()).toPNG())
   await win.webContents.executeJavaScript(`localStorage.setItem('lge.page', '"dashboard"'); location.reload(); true`)
   await new Promise((r) => setTimeout(r, 3000))
   await win.webContents.executeJavaScript(`window.dispatchEvent(new Event('lge:subscription')); true`)

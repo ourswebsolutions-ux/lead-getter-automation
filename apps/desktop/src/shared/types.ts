@@ -1,4 +1,4 @@
-export type LeadSource = 'google_maps' | 'linkedin' | 'apollo' | 'website' | 'podcast' | 'import' | 'manual'
+export type LeadSource = 'google_maps' | 'linkedin' | 'apollo' | 'website' | 'podcast' | 'import' | 'manual' | 'inbound'
 export type VerificationStatus = 'unverified' | 'queued' | 'safe' | 'risky' | 'invalid' | 'unknown' | 'failed'
 export type OutreachStatus = 'new' | 'contacted' | 'replied' | 'interested' | 'not_interested' | 'converted' | 'do_not_contact'
 export type Channel = 'whatsapp' | 'email'

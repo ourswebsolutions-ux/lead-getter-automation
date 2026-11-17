@@ -7,7 +7,9 @@ import { logger } from '../core/logger'
 import { secrets } from '../security/secrets'
 import { getSettings } from '../core/settings'
 import { registerSender, recordIncoming, findLeadByAddress, type ConversationRow } from './conversations'
-import { normalizeEmail } from './leads'
+import { normalizeEmail, upsertLead, addHistory } from './leads'
+import { classifyInbound } from './ai/inbound'
+import { expedite } from './ai/autoAgent'
 
 const log = logger('email')
 const pwKey = (id: number) => `smtp.${id}.password`
@@ -238,6 +240,45 @@ function handleBounce(addr: string, detail: string): void {
   bus.publish('campaign:updated', {})
 }
 
+/**
+ * Someone new wrote to a connected inbox. Recent, human (not automated) emails are read by the AI:
+ * a client or service inquiry becomes a lead and gets a quick reply; anything else is left alone.
+ */
+export async function handleNewSender(accountId: number, from: string, parsed: any, subject: string, body: string, externalId: string): Promise<boolean> {
+  const s = getSettings().agent
+  if (!s.replyToUnknownEmail || !s.enabled || !s.emailEnabled) return false
+  if (db().get('SELECT 1 FROM smtp_accounts WHERE from_email = ? COLLATE NOCASE', from)) return false
+  if (isAutomatedEmail(from, parsed.headers as Map<string, unknown>)) return false
+  const sentAt = parsed.date instanceof Date ? parsed.date.getTime() : Date.now()
+  if (Date.now() - sentAt > 6 * 3600_000) return false // old mail is never answered out of the blue
+  if (db().get("SELECT 1 FROM suppression_list WHERE channel = 'email' AND address = ?", from)) return false
+  let verdict
+  try {
+    verdict = await classifyInbound({ from, name: parsed.from?.value?.[0]?.name ?? null, subject, body })
+  } catch (e: any) {
+    log.warn(`Could not read new email from ${from}: ${e.message}`)
+    return false
+  }
+  if (!verdict?.inquiry) {
+    if (verdict) log.info(`Email from ${from} left alone (${verdict.kind})`)
+    return false
+  }
+  const lead = upsertLead({
+    business_name: verdict.business_name || verdict.name || from.split('@')[0],
+    contact_name: verdict.name ?? undefined,
+    source: 'inbound',
+    emails: [{ email: from }],
+    extra: { inbound_need: verdict.need, inbound_kind: verdict.kind }
+  } as any)
+  addHistory(lead.id, 'inbound_inquiry', { channel: 'email', need: verdict.need })
+  const r = recordIncoming({ channel: 'email', address: from, accountId, body, subject, externalId })
+  if (r) {
+    expedite(r.conversationId, s.newInquiryDelayMinutes)
+    bus.publish('notify', { title: 'New inquiry', body: `${verdict.name ?? from}: ${verdict.need}`.slice(0, 140), conversationId: r.conversationId })
+  }
+  return !!r
+}
+
 /** Newsletters, notifications, auto-replies and bulk mail — never answered by the agent. */
 export function isAutomatedEmail(from: string, headers: Map<string, unknown>): boolean {
   if (/^(no-?reply|do-?not-?reply|mailer-daemon|postmaster|notifications?|alerts?|news(letter)?|bounce|marketing|updates?)[@+.-]/i.test(from)) return true
@@ -279,20 +320,12 @@ export async function pollInbox(id: number): Promise<{ processed: number }> {
           if (bounced) handleBounce(bounced, subject)
         } else if (from) {
           const known = findLeadByAddress('email', from) || db().get("SELECT 1 FROM conversations WHERE channel = 'email' AND address = ?", from)
-          // People who are not leads yet (customer support) are answered only when the owner turned that on; automated mail never.
-          const fromSelf = !!db().get('SELECT 1 FROM smtp_accounts WHERE from_email = ? COLLATE NOCASE', from)
-          if (known || (!fromSelf && getSettings().agent.replyToUnknownEmail && !isAutomatedEmail(from, parsed.headers as Map<string, unknown>))) {
-            const clean = stripQuoted(body)
-            recordIncoming({
-              channel: 'email',
-              address: from,
-              accountId: id,
-              body: clean || body.slice(0, 4000),
-              subject,
-              externalId: parsed.messageId ?? `uid:${id}:${uid}`
-            })
+          const clean = stripQuoted(body) || body.slice(0, 4000)
+          const externalId = parsed.messageId ?? `uid:${id}:${uid}`
+          if (known) {
+            recordIncoming({ channel: 'email', address: from, accountId: id, body: clean, subject, externalId })
             processed++
-          }
+          } else if (await handleNewSender(id, from, parsed, subject, clean, externalId)) processed++
         }
         lastUid = Math.max(lastUid, uid)
       }

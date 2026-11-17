@@ -121,10 +121,21 @@ export function enqueueReply(convId: number, messageId: number, now = new Date()
   }
   // A follow-up waiting for this customer is no longer needed: they wrote back.
   db().run("UPDATE agent_queue SET status = 'cancelled', note = 'Customer replied', updated_at = datetime('now') WHERE conversation_id = ? AND kind = 'followup' AND status = 'waiting'", convId)
-  const due = computeDueAt(now, getSettings().agent)
+  // Someone writing for the first time (a new inquiry) gets a quicker answer than an ongoing chat.
+  const cfg = getSettings().agent
+  const isNew = !db().get("SELECT 1 FROM messages WHERE conversation_id = ? AND (direction = 'out' AND author != 'system' OR (direction = 'in' AND id < ?))", convId, messageId)
+  const due = computeDueAt(now, isNew ? { ...cfg, delayMinutes: Math.min(cfg.delayMinutes, cfg.newInquiryDelayMinutes ?? 2), delayJitterMinutes: Math.min(cfg.delayJitterMinutes, 2) } : cfg)
   const r = db().run("INSERT OR IGNORE INTO agent_queue (conversation_id, kind, trigger_message_id, due_at) VALUES (?, 'reply', ?, ?)", convId, messageId, sqlTime(due))
   bus.publish('agent:queue', { conversationId: convId })
   return r.changes ? Number(r.lastInsertRowid) : null
+}
+
+/** New inquiries are answered sooner than ongoing conversations (still inside working hours). */
+export function expedite(convId: number, minutes: number, now = new Date(), random = Math.random): void {
+  const m = Math.max(0, minutes) + random() * Math.min(2, Math.max(0.3, minutes / 2))
+  const due = nextWorkingTime(new Date(now.getTime() + m * 60_000), getSettings().agent, random)
+  db().run("UPDATE agent_queue SET due_at = MIN(due_at, ?), updated_at = datetime('now') WHERE conversation_id = ? AND kind = 'reply' AND status = 'waiting'", sqlTime(due), convId)
+  bus.publish('agent:queue', { conversationId: convId })
 }
 
 /** A follow-up message if the customer stays quiet (e.g. "contact me next week"). */

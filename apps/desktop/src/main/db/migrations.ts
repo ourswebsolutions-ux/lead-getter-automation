@@ -583,5 +583,10 @@ CREATE INDEX ix_agent_queue_due ON agent_queue(status, due_at);
 ALTER TABLE smtp_accounts ADD COLUMN agent_enabled INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE whatsapp_accounts ADD COLUMN agent_enabled INTEGER NOT NULL DEFAULT 1;
 `
+  },
+  {
+    version: 9,
+    name: 'inbound leads',
+    sql: `INSERT OR IGNORE INTO lead_sources (id, label) VALUES ('inbound', 'Inbound (wrote to you)');`
   }
 ]

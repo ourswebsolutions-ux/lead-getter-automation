@@ -13,6 +13,7 @@ import { listApprovals } from './agent'
 import { addEmailAccount } from '../emailAutoConfig'
 import { CATALOG, CATALOG_CHANNELS } from './assistantCatalog'
 import * as knowledge from '../knowledge'
+import { writeTemplate } from './writer'
 import type { LeadFilter } from '@shared/types'
 
 /**
@@ -371,24 +372,8 @@ const TOOLS: Record<string, Tool> = {
     desc: 'AI writes + saves a category-specific template.',
     run: async (a) => {
       const c = categoryOrThrow(a.category)
-      const s = getSettings()
-      const offer = norm(a.offer) || 'website development'
-      const r = await generateJson<{ subject: string; body: string }>({
-        purpose: 'assistant',
-        system: `You write short, natural cold emails for ${s.company.name || 'a software agency'}.
-${s.company.description ? `About us: ${s.company.description}\n` : ''}${s.company.services ? `Services:\n${s.company.services}\n` : ''}
-Write a reusable first-touch email template for businesses in the category "${c.name}", offering: ${offer}.
-- Speak to what this kind of business needs (e.g. a shoe shop: online catalogue and orders; a restaurant: menu and online ordering; real estate: listings and CRM).
-- Use the variables {business_name}, {contact_name} (first name, may be "there"), {city} exactly like that. You may use one {Hi|Hello} spin.
-- 60-110 words, plain text, no markdown, no hype, no invented facts or prices, one easy question at the end.
-- Subject under 7 words, may include {business_name}.
-${s.company.signature ? `- End with this signature:\n${s.company.signature}` : '- No signature.'}
-Return JSON {"subject": string, "body": string}`,
-        messages: [{ role: 'user', content: `Category: ${c.name}. Offer: ${offer}.` }],
-        maxTokens: 600
-      })
-      const id = templates.saveTemplate({ name: norm(a.name) || `${c.name} — ${title(offer)}`, subject: r.subject, body: r.body })
-      return { saved_template: norm(a.name) || `${c.name} — ${title(offer)}`, id, subject: r.subject, body: r.body, _button: { label: 'Edit template', page: 'email-templates' } }
+      const t = await writeTemplate(c.name, norm(a.offer) || undefined, norm(a.name) || undefined)
+      return { saved_template: t.name, id: t.id, subject: t.subject, body: t.body, _button: { label: 'Edit template', page: 'email-templates' } }
     }
   },
   prepare_campaign: {
@@ -628,7 +613,7 @@ async function runPending(): Promise<any> {
     bus.publish('leads:changed', {})
     return { done: true, deleted_businesses: n }
   }
-  const r = campaigns.launchEmailCampaign(p.input)
+  const r = await campaigns.launchEmailCampaignAuto(p.input)
   return {
     started: !r.scheduled,
     scheduled: r.scheduled,
