@@ -4,6 +4,7 @@ import { logActivity } from '../core/activity'
 import { getSettings } from '../core/settings'
 import { addHistory, optOutLead, normalizePhone, normalizeEmail } from './leads'
 import type { Channel } from '@shared/types'
+import { cancelForConversation } from './ai/autoAgent'
 
 export type Sender = (conv: ConversationRow, body: string, opts: { subject?: string | null; html?: string | null }) => Promise<{ externalId?: string | null }>
 
@@ -124,6 +125,39 @@ export function isOptOut(text: string): boolean {
   return kws.some((k) => t === k || (k.length > 4 && t.includes(k) && t.length < 80))
 }
 
+/**
+ * Do-not-contact on every channel: this address plus the lead's other emails and phone number are
+ * suppressed, campaigns stop, AI is paused and waiting AI replies are cancelled.
+ */
+export function suppressEverywhere(convId: number, reason: string): void {
+  const conv = db().get<ConversationRow>('SELECT * FROM conversations WHERE id = ?', convId)
+  if (!conv) return
+  const addresses: string[] = []
+  const add = (channel: Channel, address: string | null | undefined) => {
+    if (!address) return
+    addresses.push(address)
+    db().run('INSERT OR IGNORE INTO suppression_list (channel, address, reason) VALUES (?, ?, ?)', channel, address, reason)
+  }
+  add(conv.channel, conv.address)
+  if (conv.lead_id) {
+    const lead = db().get<{ phone_normalized: string | null }>('SELECT phone_normalized FROM leads WHERE id = ?', conv.lead_id)
+    add('whatsapp', lead?.phone_normalized)
+    for (const e of db().all<{ email: string }>('SELECT ea.email FROM lead_emails le JOIN email_addresses ea ON ea.id = le.email_id WHERE le.lead_id = ?', conv.lead_id)) add('email', e.email)
+    optOutLead(conv.lead_id, reason)
+  }
+  for (const c of db().all<{ id: number; address: string }>('SELECT id, address FROM conversations WHERE id = ? OR lead_id = ?', convId, conv.lead_id ?? -1)) {
+    db().run("UPDATE conversations SET interest = 'not_interested', ai_mode = 'paused' WHERE id = ?", c.id)
+    cancelForConversation(c.id, 'Customer opted out')
+  }
+  db().run(
+    `UPDATE campaign_recipients SET status = 'stopped', next_send_at = NULL WHERE status IN ('queued','sending','sent') AND address IN (${addresses.map(() => '?').join(',')})`,
+    ...addresses
+  )
+  recordMessage(convId, { direction: 'out', author: 'system', body: 'Contact opted out. Automated messages are disabled for this contact on email and WhatsApp.', status: 'sent' })
+  logActivity('system', 'opt_out', 'conversation', convId, { reason })
+  bus.publish('notify', { title: 'Contact opted out', body: conv.address })
+}
+
 /** Entry point for every inbound WhatsApp/email message. */
 export function recordIncoming(p: {
   channel: Channel
@@ -157,12 +191,7 @@ export function recordIncoming(p: {
   )
 
   if (isOptOut(p.body)) {
-    db().run("INSERT OR IGNORE INTO suppression_list (channel, address, reason) VALUES (?, ?, 'Opt-out reply')", p.channel, conv.address)
-    if (conv.lead_id) optOutLead(conv.lead_id, 'Opt-out reply')
-    db().run("UPDATE conversations SET interest = 'not_interested', ai_mode = 'paused' WHERE id = ?", conv.id)
-    recordMessage(conv.id, { direction: 'out', author: 'system', body: 'Contact opted out. Automated messages are disabled for this contact.', status: 'sent' })
-    logActivity('system', 'opt_out', 'conversation', conv.id)
-    bus.publish('notify', { title: 'Contact opted out', body: conv.address })
+    suppressEverywhere(conv.id, 'Opt-out reply')
     return { conversationId: conv.id, messageId }
   }
 
@@ -202,7 +231,10 @@ export async function sendInConversation(
     try {
       const r = await sender(conv, body, { subject, html: opts.html })
       const id = recordMessage(convId, { direction: 'out', author, body, subject, externalId: r.externalId ?? null })
-      if (author === 'human') db().run("UPDATE conversations SET unread = 0 WHERE id = ?", convId)
+      if (author === 'human') {
+        db().run("UPDATE conversations SET unread = 0 WHERE id = ?", convId)
+        cancelForConversation(convId, 'You replied yourself')
+      }
       if (conv.lead_id) db().run("UPDATE leads SET outreach_status = CASE WHEN outreach_status = 'new' THEN 'contacted' ELSE outreach_status END WHERE id = ?", conv.lead_id)
       logActivity(author === 'human' ? 'user' : author === 'ai' ? 'ai' : 'system', 'message_sent', 'conversation', convId)
       return id
@@ -282,7 +314,10 @@ export function markRead(id: number): void {
 
 export function setAiMode(id: number, mode: 'auto' | 'paused' | 'human'): void {
   db().run('UPDATE conversations SET ai_mode = ? WHERE id = ?', mode, id)
-  if (mode !== 'auto') db().run("UPDATE approvals SET status = 'superseded' WHERE conversation_id = ? AND kind = 'reply' AND status = 'pending'", id)
+  if (mode !== 'auto') {
+    db().run("UPDATE approvals SET status = 'superseded' WHERE conversation_id = ? AND kind = 'reply' AND status = 'pending'", id)
+    cancelForConversation(id, mode === 'human' ? 'You took over' : 'AI paused for this customer')
+  }
   logActivity('user', `ai_${mode}`, 'conversation', id)
   bus.publish('conversation:updated', { id })
 }

@@ -550,5 +550,38 @@ CREATE TABLE assistant_state (
   value TEXT NOT NULL
 );
 `
+  },
+  {
+    version: 8,
+    name: 'autonomous agent: knowledge, reply queue, per-account switches',
+    sql: `
+CREATE TABLE org_knowledge (
+  id INTEGER PRIMARY KEY,
+  topic TEXT NOT NULL,              -- company | services | pricing | policies | contact | hours | faq | style | other
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  private INTEGER NOT NULL DEFAULT 0, -- internal only: never shown to customers
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE agent_queue (
+  id INTEGER PRIMARY KEY,
+  conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL DEFAULT 'reply' CHECK (kind IN ('reply','followup')),
+  trigger_message_id INTEGER,       -- newest inbound message this reply answers
+  due_at TEXT NOT NULL,             -- UTC 'YYYY-MM-DD HH:MM:SS'
+  status TEXT NOT NULL DEFAULT 'waiting' CHECK (status IN ('waiting','working','sent','approval','skipped','failed','cancelled')),
+  reply TEXT,
+  decision TEXT,                    -- JSON: intent, interest, reasons (AI decision history)
+  note TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX ux_agent_queue_trigger ON agent_queue(conversation_id, trigger_message_id) WHERE kind = 'reply';
+CREATE INDEX ix_agent_queue_due ON agent_queue(status, due_at);
+ALTER TABLE smtp_accounts ADD COLUMN agent_enabled INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE whatsapp_accounts ADD COLUMN agent_enabled INTEGER NOT NULL DEFAULT 1;
+`
   }
 ]

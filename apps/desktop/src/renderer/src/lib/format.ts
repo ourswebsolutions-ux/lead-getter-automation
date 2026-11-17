@@ -22,6 +22,12 @@ export function fmtRelative(s: string | null | undefined): string {
   const d = parseDate(s)
   if (!d) return '—'
   const diff = (Date.now() - d.getTime()) / 1000
+  if (diff < -45) {
+    const ahead = -diff
+    if (ahead < 3600) return `in ${Math.round(ahead / 60)}m`
+    if (ahead < 86400) return `in ${Math.round(ahead / 3600)}h`
+    return `in ${Math.round(ahead / 86400)}d`
+  }
   if (diff < 45) return 'just now'
   if (diff < 3600) return `${Math.round(diff / 60)}m ago`
   if (diff < 86400) return `${Math.round(diff / 3600)}h ago`

@@ -238,6 +238,18 @@ function handleBounce(addr: string, detail: string): void {
   bus.publish('campaign:updated', {})
 }
 
+/** Newsletters, notifications, auto-replies and bulk mail — never answered by the agent. */
+export function isAutomatedEmail(from: string, headers: Map<string, unknown>): boolean {
+  if (/^(no-?reply|do-?not-?reply|mailer-daemon|postmaster|notifications?|alerts?|news(letter)?|bounce|marketing|updates?)[@+.-]/i.test(from)) return true
+  const h = (k: string) => String((headers.get(k) as any)?.value ?? headers.get(k) ?? '').toLowerCase()
+  const auto = h('auto-submitted')
+  if (auto && auto !== 'no') return true
+  if (headers.has('list-unsubscribe') || headers.has('list-id')) return true
+  if (/bulk|list|junk|auto_reply/.test(h('precedence'))) return true
+  if (headers.has('x-autoreply') || headers.has('x-autorespond') || /auto-?reply|out of office/.test(h('x-auto-response-suppress') + h('subject'))) return true
+  return false
+}
+
 const polling = new Set<number>()
 export async function pollInbox(id: number): Promise<{ processed: number }> {
   if (polling.has(id)) return { processed: 0 }
@@ -267,7 +279,9 @@ export async function pollInbox(id: number): Promise<{ processed: number }> {
           if (bounced) handleBounce(bounced, subject)
         } else if (from) {
           const known = findLeadByAddress('email', from) || db().get("SELECT 1 FROM conversations WHERE channel = 'email' AND address = ?", from)
-          if (known) {
+          // People who are not leads yet (customer support) are answered only when the owner turned that on; automated mail never.
+          const fromSelf = !!db().get('SELECT 1 FROM smtp_accounts WHERE from_email = ? COLLATE NOCASE', from)
+          if (known || (!fromSelf && getSettings().agent.replyToUnknownEmail && !isAutomatedEmail(from, parsed.headers as Map<string, unknown>))) {
             const clean = stripQuoted(body)
             recordIncoming({
               channel: 'email',
@@ -302,7 +316,7 @@ export async function pollInbox(id: number): Promise<{ processed: number }> {
 }
 
 let pollTimer: NodeJS.Timeout | null = null
-export function startInboxPolling(intervalMs = 180_000): void {
+export function startInboxPolling(intervalMs = 90_000): void {
   const run = () => {
     for (const a of db().all<{ id: number }>('SELECT id FROM smtp_accounts WHERE enabled = 1 AND imap_host IS NOT NULL')) void pollInbox(a.id)
   }

@@ -144,6 +144,7 @@ function Workspace({ id }: { id: number }) {
         reload()
       }
     })
+  const { data: aiDue, reload: reloadPending } = useQuery<any>('agent:pendingFor', [id], { events: ['agent:*'], poll: 30000 })
   const setMode = (m: string, msg: string) => run('m', () => rpc('conversations:setAiMode', id, m), { success: msg }).then(reload)
   const update = (patch: any, msg?: string) => run('u', () => rpc('conversations:update', id, patch), msg ? { success: msg } : {}).then(reload)
 
@@ -151,6 +152,14 @@ function Workspace({ id }: { id: number }) {
   return (
     <>
       <section>
+        {aiDue && c.ai_mode === 'auto' && (
+          <div className="row" style={{ padding: '7px 18px', gap: 8, fontSize: 12.5, background: 'var(--amber-soft)', borderBottom: '1px solid var(--border)' }}>
+            <Bot size={13} />
+            <span className="grow">{aiDue.kind === 'followup' ? 'AI follow-up planned' : 'AI will reply'} {fmtRelative(aiDue.due_at)}</span>
+            <Button size="sm" onClick={() => run('n', () => rpc('agent:sendNow', aiDue.id)).then(reloadPending)}>Reply now</Button>
+            <Button size="sm" variant="ghost" onClick={() => run('x', () => rpc('agent:cancelItem', aiDue.id)).then(reloadPending)}>Cancel</Button>
+          </div>
+        )}
         <div className="row" style={{ padding: '12px 18px', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
           <div className="avatar" style={{ background: avatarColor(name) }}>{initials(name)}</div>
           <div className="grow" style={{ minWidth: 0 }}>

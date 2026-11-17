@@ -12,6 +12,7 @@ import { backgroundStatus } from '../maps/background'
 import { listApprovals } from './agent'
 import { addEmailAccount } from '../emailAutoConfig'
 import { CATALOG, CATALOG_CHANNELS } from './assistantCatalog'
+import * as knowledge from '../knowledge'
 import type { LeadFilter } from '@shared/types'
 
 /**
@@ -452,6 +453,29 @@ Return JSON {"subject": string, "body": string}`,
       return runPending()
     }
   },
+  save_org_info: {
+    args: '{"topic": "company"|"services"|"pricing"|"policies"|"contact"|"hours"|"faq"|"style"|"other", "title": string, "content": string, "private"?: boolean}',
+    desc: 'Save business info the email/WhatsApp agent must know (same topic+title replaces). private = owner-only, never told to customers. Split long info into several items.',
+    run: (a) => {
+      const id = knowledge.saveKnowledge({ topic: a.topic, title: a.title, content: a.content, private: !!a.private })
+      return { saved: true, id, topic: a.topic, title: a.title, _button: { label: 'See saved info', page: 'agent', params: { tab: 'knowledge' } } }
+    }
+  },
+  list_org_info: {
+    args: '{}',
+    desc: 'What the agent knows about the business.',
+    run: () => knowledge.listKnowledge().map((k) => ({ id: k.id, topic: k.topic, title: k.title, content: k.content.slice(0, 300), private: !!k.private }))
+  },
+  remove_org_info: {
+    args: '{"id": number}',
+    desc: 'Remove a saved info item (ask first if unclear which).',
+    run: (a) => {
+      const item = knowledge.listKnowledge().find((k) => k.id === Number(a.id))
+      if (!item) throw new Error('No saved item with that id. Use list_org_info.')
+      knowledge.deleteKnowledge(item.id)
+      return { removed: item.title }
+    }
+  },
   capabilities: {
     args: '{"area": string}',
     desc: `Everything you can do in one area of the app (exact actions + arguments). Areas: ${Object.keys(CATALOG).join(', ')}.`,
@@ -638,6 +662,7 @@ RULES
 - Deletes, removals, sending messages and other risky actions always show an approval summary first; then wait for the user's yes.
 - Email accounts: the user may type the email + app password in chat — the app adds the account locally and hides the password before you see it (you will see the result as a tool note). Or offer add_email_account (form button). Never ask the user to repeat a password and never write one.
 - Never invent prices, promises or facts about the user's business.
+- When the user tells you about their business (services, prices, packages, policies, hours, contact, FAQs, how to talk to customers), save it with save_org_info right away — one item per topic — so the email/WhatsApp agent uses it. Confirm briefly what you saved.
 - Never write a campaign summary or ask "approve?" yourself — only prepare_campaign creates a campaign summary. Every number you state must come from a tool result.
 - Never mention tool names (like search_status) to the user; say it in plain words ("I can check progress for you").
 

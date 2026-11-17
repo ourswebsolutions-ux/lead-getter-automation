@@ -5,28 +5,33 @@ import { useNav } from '../../lib/nav'
 import { fmtNum, fmtRelative, fmtDate } from '../../lib/format'
 import { Button, Card, EmptyState, Field, Input, PageHeader, Select, StatusPill, SwitchRow, Tabs, Textarea, Callout, Segmented } from '../../components/ui'
 import { ApprovalPanel } from '../../components/Approval'
+import { AgentControlTab, KnowledgeTab } from './AgentControl'
 
-type Tab = 'approvals' | 'providers' | 'persona' | 'pricing' | 'usage'
+type Tab = 'agent' | 'knowledge' | 'approvals' | 'providers' | 'persona' | 'pricing' | 'usage'
 
 export function AgentPage() {
   const { params } = useNav()
-  const [tab, setTab] = useState<Tab>((params.tab as Tab) ?? 'approvals')
+  const [tab, setTab] = useState<Tab>((params.tab as Tab) ?? 'agent')
   const { data: approvals } = useQuery<any[]>('agent:approvals', ['open'], { events: ['approval:*'] })
   return (
     <div className="page">
       <div className="page-inner">
-        <PageHeader eyebrow="Intelligence" title="AI Sales Agent" desc="Researches prospects, writes personal outreach, holds natural conversations — and asks you before anything commercial." />
+        <PageHeader eyebrow="Intelligence" title="AI Sales Agent" desc="Answers your email and WhatsApp customers like a trained team member — from what you teach it, on your schedule." />
         <Tabs
           value={tab}
           onChange={setTab}
           tabs={[
+            { value: 'agent', label: 'Agent', icon: <Bot size={14} /> },
+            { value: 'knowledge', label: 'Knowledge', icon: <UserRound size={14} /> },
             { value: 'approvals', label: 'Approvals', icon: <ClipboardCheck size={14} />, count: approvals?.length ?? null },
             { value: 'providers', label: 'AI providers', icon: <Plug size={14} /> },
-            { value: 'persona', label: 'Company & persona', icon: <UserRound size={14} /> },
+            { value: 'persona', label: 'Company & style', icon: <UserRound size={14} /> },
             { value: 'pricing', label: 'Pricing rules', icon: <Tag size={14} /> },
             { value: 'usage', label: 'Usage & logs', icon: <Activity size={14} /> }
           ]}
         />
+        {tab === 'agent' && <AgentControlTab />}
+        {tab === 'knowledge' && <KnowledgeTab />}
         {tab === 'approvals' && <Approvals open={approvals} />}
         {tab === 'providers' && <Providers />}
         {tab === 'persona' && <Persona />}
@@ -206,17 +211,10 @@ function Persona() {
       </Card>
       <div className="col gap-16">
         <Card title="Agent behaviour">
-          <SwitchRow title="AI agent enabled" desc="New conversations start with the AI active. You can pause it per conversation." on={agent.enabled} onChange={(v) => setAgent({ ...agent, enabled: v })} />
-          <SwitchRow
-            title="Send routine replies automatically"
-            desc="When off, every AI reply waits in Approvals. Pricing, discounts and commitments always need approval regardless."
-            on={agent.autoSendReplies}
-            onChange={(v) => setAgent({ ...agent, autoSendReplies: v })}
-          />
-          <div className="grid-3 mt-16" style={{ gap: 12 }}>
+          <div className="faint" style={{ fontSize: 12.5, marginBottom: 12 }}>On/off, auto reply and reply timing are in the Agent tab.</div>
+          <div className="grid-2" style={{ gap: 12 }}>
             <Field label="Tone"><Select value={agent.tone} onChange={(v) => setAgent({ ...agent, tone: v })} options={['professional', 'friendly', 'consultative', 'formal'].map((t) => ({ value: t, label: t[0].toUpperCase() + t.slice(1) }))} /></Field>
             <Field label="Default language"><Input {...a('language')} /></Field>
-            <Field label="Reply delay (seconds)" hint="Waits so quick follow-ups are answered together."><Input type="number" min={5} max={3600} value={agent.replyDelaySeconds} onChange={(e) => setAgent({ ...agent, replyDelaySeconds: Number(e.target.value) })} /></Field>
           </div>
         </Card>
         <Card title="Outreach strategy">

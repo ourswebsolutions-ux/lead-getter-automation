@@ -113,7 +113,7 @@ export const CATALOG: Record<string, { about: string; calls: Record<string, Cata
       'conversations:list': { args: '[{folder?: "all"|"email"|"whatsapp"|"interested"|"not_interested"|"pending_replies"|"pending_approvals"|"human", search?, limit?}]', desc: 'Conversations.' },
       'conversations:get': { args: '[conversationId]', desc: 'Messages of one conversation.' },
       'conversations:markRead': { args: '[conversationId]', desc: 'Mark read.' },
-      'conversations:setAiMode': { args: '[conversationId, "auto"|"paused"|"human"]', desc: 'Let AI answer, pause AI, or hand to a human.' },
+      'conversations:setAiMode': { args: '[conversationId, "auto"|"paused"|"human"]', desc: 'Let AI answer, pause AI for this customer, or take over (human).' },
       'conversations:update': { args: '[conversationId, {status?: "open"|"resolved", interest?: "interested"|"not_interested"|"unknown", notes?}]', desc: 'Update status / interest.' },
       'agent:draft': { args: '[conversationId]', desc: 'AI drafts a reply (not sent).' },
       'conversations:send': { args: '[conversationId, body, subject?]', desc: 'Send a message to the lead.', confirm: true }
@@ -125,7 +125,16 @@ export const CATALOG: Record<string, { about: string; calls: Record<string, Cata
       'agent:approvals': { args: '["open"|"all"]', desc: 'Drafts / pricing waiting for approval.' },
       'agent:approve': { args: '[approvalId, editedText?]', desc: 'Send the approved reply.', confirm: true },
       'agent:reject': { args: '[approvalId]', desc: 'Discard a draft.' },
-      'settings:update': { args: '[{agent: {enabled?, autoSendReplies?, tone?: "professional"|"friendly"|"consultative"|"formal", language?, replyDelaySeconds?, outreachStrategy?}}]', desc: 'AI agent behaviour.' }
+      'settings:update': {
+        args: '[{agent: {...current agent settings, changed fields}}] — read settings:get first and send the whole agent object',
+        desc: 'Agent controls: enabled, emailEnabled, whatsappEnabled, autoSendReplies (send without approval), delayMinutes (default 30, 0 = immediately), delayJitterMinutes, workingHoursEnabled, workStart "09:00", workEnd "21:00", workDays [0-6], timezone (IANA, "" = this computer), approveSensitive, replyToUnknownEmail, markWhatsAppRead, tone, language.'
+      },
+      'agent:overview': { args: '[]', desc: 'Agent counts: waiting replies, sent today, approvals, failed, next due.' },
+      'agent:activity': { args: '[{status?: "pending"|"sent"|"approval"|"failed", channel?: "email"|"whatsapp", limit?}]', desc: 'Incoming messages, AI replies and decisions.' },
+      'agent:sendNow': { args: '[queueId]', desc: 'Send a waiting reply now.' },
+      'agent:cancelItem': { args: '[queueId]', desc: 'Cancel a waiting reply.' },
+      'agent:accounts': { args: '[]', desc: 'Accounts and whether the agent answers on them.' },
+      'agent:setAccountEnabled': { args: '["email"|"whatsapp", accountId, true|false]', desc: 'Turn the agent on/off for one account.' }
     }
   },
   settings: {

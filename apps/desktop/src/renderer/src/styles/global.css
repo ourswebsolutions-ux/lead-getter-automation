@@ -2829,3 +2829,100 @@ table.tbl {
 .spin {
   animation: spin 0.9s linear infinite;
 }
+
+/* ------------------------------------------------------------------ autonomous agent */
+.ag-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.ag-hero.on {
+  border-color: color-mix(in srgb, var(--green) 40%, transparent);
+  background: linear-gradient(90deg, var(--green-soft), var(--surface) 60%);
+}
+.ag-hero-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent), #ff7a45);
+  flex-shrink: 0;
+}
+.ag-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+}
+.ag-row:last-child {
+  border-bottom: 0;
+}
+.ag-row-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+.ag-row-desc {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 1px;
+}
+.ag-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  cursor: pointer;
+}
+.ag-item:hover {
+  background: var(--hover);
+}
+.ag-ch {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: var(--surface-3);
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+.ag-in {
+  font-size: 12.5px;
+  color: var(--text-2);
+  margin-top: 4px;
+}
+.ag-out {
+  font-size: 12.5px;
+  margin-top: 6px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  white-space: pre-wrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.kn-item {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.kn-item:last-child {
+  border-bottom: 0;
+}
+.kn-content {
+  font-size: 12.5px;
+  color: var(--text-2);
+  white-space: pre-wrap;
+  margin-top: 4px;
+  max-height: 140px;
+  overflow-y: auto;
+}

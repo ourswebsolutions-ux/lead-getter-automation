@@ -26,6 +26,24 @@ export interface AppSettings {
     /** When true, non-commercial replies are sent automatically; otherwise every AI reply needs approval. */
     autoSendReplies: boolean
     replyDelaySeconds: number
+    /** Channel switches for the autonomous agent. */
+    emailEnabled: boolean
+    whatsappEnabled: boolean
+    /** Replies wait this long (minutes) ± a random variation, like a person would. 0 = immediately. */
+    delayMinutes: number
+    delayJitterMinutes: number
+    /** Only send inside working hours (in `timezone`, '' = this computer's time zone). */
+    workingHoursEnabled: boolean
+    workStart: string
+    workEnd: string
+    workDays: number[]
+    timezone: string
+    /** Complaints, payments, legal, refunds and anything uncertain wait for the owner even when auto-reply is on. */
+    approveSensitive: boolean
+    /** Also answer emails from people who are not leads (customer support). Automated mail is always ignored. */
+    replyToUnknownEmail: boolean
+    /** Mark WhatsApp messages as read when the agent answers them. */
+    markWhatsAppRead: boolean
     outreachStrategy: string
     templates: string
   }
@@ -60,6 +78,18 @@ export const DEFAULT_SETTINGS: AppSettings = {
     language: 'English',
     autoSendReplies: false,
     replyDelaySeconds: 45,
+    emailEnabled: true,
+    whatsappEnabled: true,
+    delayMinutes: 30,
+    delayJitterMinutes: 10,
+    workingHoursEnabled: false,
+    workStart: '09:00',
+    workEnd: '21:00',
+    workDays: [0, 1, 2, 3, 4, 5, 6],
+    timezone: '',
+    approveSensitive: true,
+    replyToUnknownEmail: false,
+    markWhatsAppRead: true,
     outreachStrategy:
       'Lead with one specific, relevant observation about their business. Offer value before asking for anything. Keep the first message under 90 words and end with a single low-pressure question.',
     templates: ''

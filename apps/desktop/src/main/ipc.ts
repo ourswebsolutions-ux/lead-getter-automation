@@ -18,6 +18,8 @@ import { addEmailAccount } from './services/emailAutoConfig'
 import * as campaigns from './services/campaigns'
 import * as templates from './services/templates'
 import * as assistant from './services/ai/assistant'
+import * as knowledge from './services/knowledge'
+import * as autoAgent from './services/ai/autoAgent'
 import * as analytics from './services/analytics'
 import * as gmaps from './services/maps'
 import * as license from './services/subscription'
@@ -288,6 +290,22 @@ const handlers: Record<string, Handler> = {
   'campaigns:resume': (id: number) => campaigns.resumeCampaign(id),
   'campaigns:stop': (id: number) => campaigns.stopCampaign(id),
   'campaigns:preview': (id: number, leadId: number, step?: number) => campaigns.previewMessage(id, leadId, step),
+  'knowledge:list': () => knowledge.listKnowledge(),
+  'knowledge:save': (item) => knowledge.saveKnowledge(item),
+  'knowledge:delete': (id: number) => knowledge.deleteKnowledge(id),
+  'agent:overview': () => autoAgent.agentOverview(),
+  'agent:activity': (opts) => autoAgent.agentActivity(opts ?? {}),
+  'agent:pendingFor': (convId: number) => db().get("SELECT id, kind, due_at FROM agent_queue WHERE conversation_id = ? AND status IN ('waiting','working') ORDER BY due_at LIMIT 1", convId) ?? null,
+  'agent:sendNow': (queueId: number) => autoAgent.sendNow(queueId),
+  'agent:cancelItem': (queueId: number) => autoAgent.cancelItem(queueId),
+  'agent:accounts': () => ({
+    email: db().all('SELECT id, from_email label, agent_enabled, status FROM smtp_accounts ORDER BY id'),
+    whatsapp: db().all('SELECT id, label, phone, agent_enabled, status FROM whatsapp_accounts ORDER BY id')
+  }),
+  'agent:setAccountEnabled': (channel: 'email' | 'whatsapp', id: number, on: boolean) => {
+    db().run(`UPDATE ${channel === 'email' ? 'smtp_accounts' : 'whatsapp_accounts'} SET agent_enabled = ? WHERE id = ?`, on ? 1 : 0, id)
+  },
+  'agent:timezones': () => (Intl as any).supportedValuesOf?.('timeZone') ?? [],
   'assistant:messages': () => assistant.listMessages(),
   'assistant:ask': (text: string) => {
     if (assistant.isBusy()) throw new Error('Still working on your last message — wait a moment or press Stop.')

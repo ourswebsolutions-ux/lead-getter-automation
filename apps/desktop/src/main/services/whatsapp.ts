@@ -32,6 +32,8 @@ interface Conn {
   reconnectTimer?: NodeJS.Timeout
 }
 const conns = new Map<number, Conn>()
+/** Keys of unread inbound messages per account + phone, so the agent can mark them read when it answers. */
+const unreadKeys = new Map<string, any[]>()
 
 // ---------------------------------------------------------------- encrypted auth state
 
@@ -196,6 +198,8 @@ export async function connect(accountId: number): Promise<void> {
           (msg.audioMessage ? '[voice message]' : msg.imageMessage ? '[image]' : msg.documentMessage ? '[document]' : msg.stickerMessage ? null : '[unsupported message]')
         if (!text) continue
         db().run("UPDATE whatsapp_accounts SET last_activity_at = datetime('now') WHERE id = ?", accountId)
+        const k = `${accountId}:${phone}`
+        unreadKeys.set(k, [...(unreadKeys.get(k) ?? []), m.key].slice(-50))
         recordIncoming({ channel: 'whatsapp', address: phone, accountId, body: text, externalId: m.key.id ?? null })
       } catch (e) {
         log.error('Failed to process inbound message', e)
@@ -301,6 +305,20 @@ export async function sendText(accountId: number, phone: string, text: string): 
   const sent = await c.sock.sendMessage(jid, { text })
   db().run("UPDATE whatsapp_accounts SET last_activity_at = datetime('now') WHERE id = ?", accountId)
   return sent?.key?.id ?? null
+}
+
+/** Marks the customer's messages as read (blue ticks), as a person would when answering. */
+export async function markConversationRead(accountId: number, phone: string): Promise<void> {
+  const k = `${accountId}:${phone}`
+  const keys = unreadKeys.get(k)
+  const c = conns.get(accountId)
+  if (!keys?.length || !c?.sock) return
+  try {
+    await c.sock.readMessages(keys)
+    unreadKeys.delete(k)
+  } catch (e: any) {
+    log.warn(`Could not mark WhatsApp messages read: ${e.message}`)
+  }
 }
 
 export function firstConnectedAccount(): number | null {
