@@ -1,4 +1,5 @@
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { userInfo } from 'node:os'
 import { logger } from './logger'
 
@@ -106,4 +107,18 @@ export async function isLocked(): Promise<boolean | null> {
   }
 }
 
-export const canUnlockRemotely = () => process.platform === 'linux'
+export const canUnlockRemotely = () => process.platform === 'linux' && !!CHKPWD
+
+const CHKPWD = ['/usr/sbin/unix_chkpwd', '/sbin/unix_chkpwd'].find((p) => existsSync(p))
+
+/** Linux: checks this user's own login password with the system (PAM unix_chkpwd). Nothing is stored. */
+export function verifyOwnPassword(password: string): Promise<boolean> {
+  if (process.platform !== 'linux' || !CHKPWD || !password) return Promise.resolve(false)
+  return new Promise((resolve) => {
+    const p = spawn(CHKPWD, [userInfo().username, 'nullok'], { stdio: ['pipe', 'ignore', 'ignore'] })
+    const t = setTimeout(() => (p.kill(), resolve(false)), 10_000)
+    p.on('error', () => (clearTimeout(t), resolve(false)))
+    p.on('close', (code) => (clearTimeout(t), resolve(code === 0)))
+    p.stdin.end(Buffer.concat([Buffer.from(password, 'utf8'), Buffer.from([0])]))
+  })
+}

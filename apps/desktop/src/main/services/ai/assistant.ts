@@ -517,15 +517,14 @@ const TOOLS: Record<string, Tool> = {
   },
   computer: {
     args: '{"action": "lock"|"unlock"|"sleep"|"shutdown"|"restart"}',
-    desc: 'Control the computer (Windows, Linux, Mac): lock the screen now (the software keeps running and WhatsApp control keeps working); unlock asks the owner for their unlock PIN (checked on the computer — never ask for or repeat the computer password); sleep, shut down (power off) or restart ask for approval first.',
+    desc: 'Control the computer (Windows, Linux, Mac): lock the screen now (the software keeps running and WhatsApp control keeps working); unlock: tell the owner to send their computer password as the next message (the app checks it on the computer; you never see it — never repeat or ask about it in any other way); sleep, shut down (power off) or restart ask for approval first.',
     run: async (a, ctx) => {
       const act = norm(a.action).toLowerCase().replace('power off', 'shutdown').replace('poweroff', 'shutdown').replace('reboot', 'restart') as any
       if (act === 'lock') return { ...(await computerAction('lock')), note: 'Screen locked. The software keeps running; WhatsApp commands still work.' }
       if (act === 'unlock') {
         if (process.platform === 'win32') return { ok: false, problem: 'Windows does not allow programs to unlock the lock screen — it has to be unlocked at the computer (or with Windows Remote Desktop).' }
-        if (!secrets.has('remote.unlockPin')) return { ok: false, problem: 'No unlock PIN is set yet. On the computer: Settings → WhatsApp Remote Admin → Remote unlock PIN (4–8 digits, not the computer password).' }
         bus.publish('remote:expectPin', {})
-        return { ok: true, next: 'Ask the owner to send their unlock PIN as the next message. It is checked on the computer and never shown to you. Do not ask for the computer password.' }
+        return { ok: true, next: 'Tell the owner to send their computer password as the very next message. The app checks it on the computer; you will never see it.' }
       }
       if (act === 'sleep' || act === 'shutdown' || act === 'restart') {
         const can = await canDo(act)

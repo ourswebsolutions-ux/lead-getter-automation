@@ -293,8 +293,6 @@ const handlers: Record<string, Handler> = {
   'campaigns:preview': (id: number, leadId: number, step?: number) => campaigns.previewMessage(id, leadId, step),
   'remote:status': () => remote.remoteStatus(),
   'remote:sendCode': () => remote.sendVerificationCode(),
-  'remote:setPin': (pin: string) => remote.setUnlockPin(pin),
-  'remote:clearPin': () => remote.clearUnlockPin(),
   'remote:test': async () => {
     if (!getSettings().remoteAdmin.verified) throw new Error('Verify the admin number first.')
     if (!(await remote.sendToAdmin('👋 Test from Lead Getter — remote control is connected.'))) throw new Error('Could not send. Is the WhatsApp account connected?')

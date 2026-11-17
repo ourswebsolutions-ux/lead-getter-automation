@@ -21,6 +21,7 @@ vi.mock('../src/main/core/computer', () => ({
   computerAction: async (a: string) => (computerCalls.push(a), { done: true, action: a, method: 'test' }),
   canDo: async (a: string) => (a === 'sleep' ? { ok: false, why: 'This computer does not allow sleep (no).' } : { ok: true }),
   canUnlockRemotely: () => true,
+  verifyOwnPassword: async (p: string) => p === 'ali@302',
   isLocked: async () => true
 }))
 vi.mock('../src/main/services/maps', () => ({ startSearch: () => ({ searchId: 1 }), activeSearch: () => null, stopSearch: () => {}, setMapsOptions: () => {} }))
@@ -154,7 +155,7 @@ describe('computer control from WhatsApp', () => {
   })
 })
 
-describe('remote unlock with a PIN', () => {
+describe('remote unlock with the computer password', () => {
   beforeEach(() => {
     freshDb()
     outbox.length = 0
@@ -164,40 +165,40 @@ describe('remote unlock with a PIN', () => {
     updateSettings({ remoteAdmin: { ...getSettings().remoteAdmin, enabled: true, number: ADMIN, verified: true } })
   })
 
-  it('unlocks only with the right PIN, never shows it to the AI, and locks out after 3 wrong tries', async () => {
-    R.setUnlockPin('482913')
+  it('unlocks only with the right password, never shows it to the AI, and locks out after 3 wrong tries', async () => {
     const { generateJson } = await import('../src/main/services/ai/providers')
     ;(generateJson as any).mockClear()
     script.push({ say: '', calls: [{ tool: 'computer', args: { action: 'unlock' } }] })
-    script.push({ say: 'Apna unlock PIN bhejen.', calls: [] })
+    script.push({ say: 'Apna computer password bhejen.', calls: [] })
     handler(1, ADMIN, 'pc unlock kr do')
     await settle()
-    expect(outbox.at(-1)!.text).toBe('Apna unlock PIN bhejen.')
-    handler(1, ADMIN, '111111')
+    expect(outbox.at(-1)!.text).toBe('Apna computer password bhejen.')
+    handler(1, ADMIN, 'ali@301')
     await settle()
-    expect(outbox.at(-1)!.text).toMatch(/Wrong PIN/)
+    expect(outbox.at(-1)!.text).toMatch(/Wrong password/)
     expect(computerCalls).toEqual([])
-    handler(1, ADMIN, 'unlock 482913')
+    handler(1, ADMIN, 'unlock ali@302')
     await settle()
     expect(outbox.at(-1)!.text).toMatch(/unlocked/)
     expect(computerCalls).toEqual(['unlock'])
-    expect(JSON.stringify((generateJson as any).mock.calls)).not.toMatch(/482913|111111/)
-    expect(JSON.stringify(R.remoteStatus().history)).not.toMatch(/482913/)
+    expect(JSON.stringify((generateJson as any).mock.calls)).not.toMatch(/ali@30/)
+    expect(JSON.stringify(R.remoteStatus().history)).not.toMatch(/ali@30/)
+    expect(JSON.stringify(db().all('SELECT * FROM assistant_messages'))).not.toMatch(/ali@30/)
 
-    // a plain number that was not asked for goes to the AI as a normal message
-    script.push({ say: 'ok', calls: [] })
-    handler(1, ADMIN, '1500')
+    // "unlock kr do" is a request, not a password
+    script.push({ say: '', calls: [{ tool: 'computer', args: { action: 'unlock' } }] })
+    script.push({ say: 'Password bhejen.', calls: [] })
+    handler(1, ADMIN, 'unlock kr do')
     await settle()
-    expect(computerCalls).toEqual(['unlock'])
+    expect(outbox.at(-1)!.text).toBe('Password bhejen.')
 
-    for (const p of ['unlock 000000', 'unlock 000001', 'unlock 000002']) {
-      handler(1, ADMIN, p)
+    for (const p of ['x1!', 'x2!', 'x3!']) {
+      handler(1, ADMIN, `unlock ${p}`)
       await settle()
     }
-    handler(1, ADMIN, 'unlock 482913')
+    handler(1, ADMIN, 'unlock ali@302')
     await settle()
     expect(outbox.at(-1)!.text).toMatch(/blocked for 15 minutes/)
     expect(computerCalls).toEqual(['unlock'])
-    expect(() => R.setUnlockPin('12')).toThrow(/4 to 8 digits/)
   })
 })
