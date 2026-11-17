@@ -3,10 +3,11 @@ import { Sun, Moon, Monitor, KeyRound, CheckCircle2, XCircle, Trash2, FolderOpen
 import { rpc, useAction, useQuery } from '../lib/rpc'
 import { useNav } from '../lib/nav'
 import { applyTheme } from '../lib/theme'
+import { RemoteAdminSettings } from './RemoteAdmin'
 import { fmtDate } from '../lib/format'
 import { Button, Card, Field, Input, PageHeader, Segmented, SwitchRow, Tabs, Textarea, Callout, confirmDialog, EmptyState } from '../components/ui'
 
-type Tab = 'general' | 'integrations' | 'verification' | 'compliance' | 'data'
+type Tab = 'general' | 'remote' | 'integrations' | 'verification' | 'compliance' | 'data'
 
 export function SettingsPage() {
   const { params } = useNav()
@@ -19,7 +20,7 @@ export function SettingsPage() {
     <div className="page">
       <div className="page-inner" style={{ maxWidth: 1040 }}>
         <PageHeader eyebrow="General" title="Settings" desc="Appearance, integrations, verification, compliance and your data." />
-        <Tabs value={tab} onChange={setTab} tabs={[{ value: 'general', label: 'General' }, { value: 'integrations', label: 'Integrations' }, { value: 'verification', label: 'Verification & crawling' }, { value: 'compliance', label: 'Compliance' }, { value: 'data', label: 'Data & privacy' }]} />
+        <Tabs value={tab} onChange={setTab} tabs={[{ value: 'general', label: 'General' }, { value: 'remote', label: 'WhatsApp Remote Admin' }, { value: 'integrations', label: 'Integrations' }, { value: 'verification', label: 'Verification & crawling' }, { value: 'compliance', label: 'Compliance' }, { value: 'data', label: 'Data & privacy' }]} />
         {tab === 'general' && (
           <div className="col gap-16">
             <Card title="Appearance">
@@ -36,6 +37,7 @@ export function SettingsPage() {
             </Card>
           </div>
         )}
+        {tab === 'remote' && <RemoteAdminSettings />}
         {tab === 'integrations' && <Integrations s={s} save={save} />}
         {tab === 'verification' && <VerificationSettings s={s} save={save} />}
         {tab === 'compliance' && <><Compliance s={s} save={save} /><div className="mt-16"><Suppression /></div></>}

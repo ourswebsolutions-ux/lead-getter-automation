@@ -69,6 +69,25 @@ export interface AppSettings {
   notifications: { desktop: boolean }
   maps: { autoFindEmails: boolean; verifyEmails: boolean }
   email: { rotateAccounts: boolean }
+  /** Control the app from the owner's own WhatsApp number. */
+  remoteAdmin: {
+    enabled: boolean
+    /** Admin number with country code, digits only (e.g. 923001234567). */
+    number: string
+    /** WhatsApp account that listens for the admin (null = any connected account). */
+    accountId: number | null
+    /** The admin number proved it is the owner's by sending back a code. */
+    verified: boolean
+    notifyReplies: boolean
+    notifyInterested: boolean
+    notifyPricing: boolean
+    notifyCampaigns: boolean
+    notifySearch: boolean
+    notifyEmails: boolean
+    notifyErrors: boolean
+  }
+  /** Keep working when the window is closed, and start with the computer. */
+  background: { keepRunning: boolean; startWithComputer: boolean }
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -109,7 +128,21 @@ export const DEFAULT_SETTINGS: AppSettings = {
   },
   notifications: { desktop: true },
   maps: { autoFindEmails: true, verifyEmails: false },
-  email: { rotateAccounts: true }
+  email: { rotateAccounts: true },
+  remoteAdmin: {
+    enabled: false,
+    number: '',
+    accountId: null,
+    verified: false,
+    notifyReplies: true,
+    notifyInterested: true,
+    notifyPricing: true,
+    notifyCampaigns: true,
+    notifySearch: true,
+    notifyEmails: true,
+    notifyErrors: true
+  },
+  background: { keepRunning: true, startWithComputer: false }
 }
 
 /** Keys stored in the encrypted vault, never in settings. */

@@ -24,7 +24,7 @@ export function startSearch(input: SearchInput) {
   if (!keyword && !input.category?.trim()) throw new Error('Enter a business keyword.')
   const ctl = new AbortController()
   const search = new MapsSearch(
-    { keyword: keyword || input.category.trim(), location: input.location?.trim() ?? '', category: input.category?.trim() ?? '', businessType: input.businessType ?? 'all', findEmails: input.findEmails !== false },
+    { keyword: keyword || input.category.trim(), location: input.location?.trim() ?? '', category: input.category?.trim() ?? '', businessType: input.businessType ?? 'all', findEmails: input.findEmails !== false, maxResults: input.maxResults },
     chromeSession(),
     ctl.signal
   )

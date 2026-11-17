@@ -375,6 +375,8 @@ Read the whole conversation and the customer's latest message, then return JSON:
     if (conv.lead_id && (a.interest === 'interested' || a.interest === 'not_interested'))
       db().run("UPDATE leads SET outreach_status = ? WHERE id = ? AND outreach_status NOT IN ('converted','do_not_contact')", a.interest, conv.lead_id)
     logActivity('ai', 'agent_decision', 'conversation', convId, decision)
+    if (a.interest === 'interested' && conv.interest !== 'interested')
+      bus.publish('notify', { kind: 'interested', title: 'Interested customer', body: `${conv.address}: ${(a.summary ?? last.body).slice(0, 240)}`, conversationId: convId })
     // A new person who is a real prospect/customer becomes a lead (so campaigns, categories and history work for them too).
     if (!conv.lead_id && a.intent !== 'opt_out' && a.interest !== 'not_interested' && a.intent !== 'smalltalk') {
       const lead = upsertLead({

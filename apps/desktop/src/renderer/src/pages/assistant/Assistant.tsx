@@ -121,7 +121,7 @@ export function AssistantPage() {
           )}
 
           {list.map((m, i) => {
-            if (m.role === 'user') return <div key={m.id} className="bubble user">{m.content}</div>
+            if (m.role === 'user') return <div key={m.id} className="bubble user">{m.data?.via === 'whatsapp' && <span style={{ opacity: 0.75, fontSize: 11, display: 'block' }}>📱 from WhatsApp</span>}{m.content}</div>
             if (m.role === 'tool') {
               const ok = m.data?.ok
               const label = TOOL_LABEL[m.data?.tool] ?? m.data?.tool

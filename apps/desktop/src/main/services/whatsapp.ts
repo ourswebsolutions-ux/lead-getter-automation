@@ -32,6 +32,13 @@ interface Conn {
   reconnectTimer?: NodeJS.Timeout
 }
 const conns = new Map<number, Conn>()
+/** The owner's remote-control number is handled here instead of as a customer (set by remoteAdmin). */
+type AdminHandler = (accountId: number, phone: string, text: string, meta?: { offline?: boolean; at?: number }) => boolean
+let adminHandler: AdminHandler | null = null
+export function setAdminHandler(fn: AdminHandler): void {
+  adminHandler = fn
+}
+
 /** Keys of unread inbound messages per account + phone, so the agent can mark them read when it answers. */
 const unreadKeys = new Map<string, any[]>()
 
@@ -178,7 +185,25 @@ export async function connect(accountId: number): Promise<void> {
   })
 
   sock.ev.on('messages.upsert', ({ messages, type }) => {
-    if (type !== 'notify') return
+    if (type !== 'notify') {
+      // History synced after the app was off: customers are not re-answered, but the admin is told their commands did not run.
+      for (const m of messages) {
+        try {
+          if (!m.message || m.key.fromMe) continue
+          const at = Number(m.messageTimestamp ?? 0) * 1000
+          if (!at || Date.now() - at > 12 * 3600_000) continue
+          let jid = m.key.remoteJid ?? ''
+          if (jid.endsWith('@g.us') || jid.endsWith('@broadcast') || jid.endsWith('@newsletter')) continue
+          if (jid.endsWith('@lid')) jid = (m.key as any).remoteJidAlt ?? (m.key as any).senderPn ?? jid
+          const msg: any = m.message
+          const text = msg.conversation ?? msg.extendedTextMessage?.text
+          if (text) adminHandler?.(accountId, jid.split('@')[0].split(':')[0], text, { offline: true, at })
+        } catch {
+          /* ignore */
+        }
+      }
+      return
+    }
     for (const m of messages) {
       try {
         if (!m.message || m.key.fromMe) continue
@@ -198,6 +223,10 @@ export async function connect(accountId: number): Promise<void> {
           (msg.audioMessage ? '[voice message]' : msg.imageMessage ? '[image]' : msg.documentMessage ? '[document]' : msg.stickerMessage ? null : '[unsupported message]')
         if (!text) continue
         db().run("UPDATE whatsapp_accounts SET last_activity_at = datetime('now') WHERE id = ?", accountId)
+        if (adminHandler?.(accountId, phone, text)) {
+          void conns.get(accountId)?.sock?.readMessages([m.key]).catch(() => {})
+          continue
+        }
         const k = `${accountId}:${phone}`
         unreadKeys.set(k, [...(unreadKeys.get(k) ?? []), m.key].slice(-50))
         recordIncoming({ channel: 'whatsapp', address: phone, accountId, body: text, externalId: m.key.id ?? null })

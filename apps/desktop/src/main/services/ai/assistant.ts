@@ -42,7 +42,21 @@ export type Pending = { summary: string; label: string; afterMessageId: number }
   | { kind: 'call'; channel: string; args: unknown[] }
   | { kind: 'delete_categories'; ids: number[] }
   | { kind: 'delete_leads'; ids: number[] }
+  | { kind: 'app'; action: 'quit' | 'restart' }
 )
+
+/** Window / process controls provided by the main process (index.ts). */
+export interface AppControls {
+  status: () => Record<string, unknown>
+  show: () => void
+  hide: () => void
+  quit: () => void
+  restart: () => void
+}
+let appControls: AppControls | null = null
+export function setAppControls(c: AppControls): void {
+  appControls = c
+}
 
 /** Runs an app action through the same handlers the screens use (set by ipc.ts at startup). */
 let appInvoker: ((channel: string, args: unknown[]) => Promise<unknown>) | null = null
@@ -254,13 +268,13 @@ const TOOLS: Record<string, Tool> = {
     }
   },
   maps_search: {
-    args: '{"keyword": string, "location"?: string, "category"?: string}',
+    args: '{"keyword": string, "location"?: string, "category"?: string, "max_results"?: number}',
     desc: 'Start a background Google Maps search; saves into category, skips duplicates, finds emails.',
     run: (a) => {
       const keyword = norm(a.keyword)
       if (!keyword) throw new Error('A keyword is needed, e.g. "shoes shop".')
       const cat = ensureCategory(norm(a.category) || keyword)
-      const { searchId } = gmaps.startSearch({ keyword, location: norm(a.location), category: cat.name, businessType: 'all', findEmails: true })
+      const { searchId } = gmaps.startSearch({ keyword, location: norm(a.location), category: cat.name, businessType: 'all', findEmails: true, maxResults: Number(a.max_results) > 0 ? Number(a.max_results) : undefined } as any)
       gmaps.setMapsOptions({ autoFindEmails: true })
       remember({ searchId, categoryId: cat.id, categoryName: cat.name })
       return { started: true, search_id: searchId, query: `${keyword}${a.location ? ` in ${norm(a.location)}` : ''}`, category: cat.name, category_created: cat.created, note: 'Runs in the background; progress is shown live in the chat. Use search_status for numbers.' }
@@ -462,6 +476,119 @@ const TOOLS: Record<string, Tool> = {
       return { removed: item.title }
     }
   },
+  system_status: {
+    args: '{}',
+    desc: 'Is the software running, window shown/hidden, uptime, WhatsApp/email connections, background work (search, email finder, agent queue, campaigns).',
+    run: () => {
+      const wa = db().all<{ label: string; status: string; phone: string | null }>('SELECT label, status, phone FROM whatsapp_accounts')
+      const bg = backgroundStatus()
+      const s = gmaps.activeSearch() as any
+      return {
+        software: 'running',
+        ...(appControls?.status() ?? {}),
+        whatsapp_accounts: wa.map((w) => `${w.label}${w.phone ? ` (+${w.phone})` : ''}: ${w.status}`),
+        email_accounts: db().all<{ from_email: string; status: string }>('SELECT from_email, status FROM smtp_accounts').map((e) => `${e.from_email}: ${e.status}`),
+        maps_search: s ? `${s.keyword}${s.location ? ` in ${s.location}` : ''} — ${s.saved} saved` : 'none running',
+        email_finder_waiting: bg.emailsPending,
+        verification_waiting: bg.verifyPending,
+        agent_replies_waiting: n("SELECT COUNT(*) n FROM agent_queue WHERE status IN ('waiting','working')"),
+        campaigns_running: n("SELECT COUNT(*) n FROM campaigns WHERE status = 'running'"),
+        ai_agent: getSettings().agent.enabled ? (getSettings().agent.autoSendReplies ? 'auto reply on' : 'drafts for approval') : 'off'
+      }
+    }
+  },
+  app_window: {
+    args: '{"action": "show"|"hide"|"quit"|"restart"}',
+    desc: 'Show or hide the app window (it keeps working hidden), or quit/restart the software (asks for approval; after quitting no commands can run until it is started again on the computer).',
+    run: (a, ctx) => {
+      if (!appControls) throw new Error('Window controls are not available.')
+      const act = norm(a.action).toLowerCase()
+      if (act === 'show') return (appControls.show(), { ok: true, window: 'shown' })
+      if (act === 'hide') return (appControls.hide(), { ok: true, window: 'hidden — still running in the background' })
+      if (act === 'quit' || act === 'restart')
+        return requestApproval({ kind: 'app', action: act, summary: act === 'quit' ? 'Turn the software OFF. While it is off, WhatsApp commands, campaigns and AI replies stop until someone starts it on the computer.' : 'Restart the software (about 20 seconds).', label: act === 'quit' ? 'Yes, turn off' : 'Yes, restart' }, ctx)
+      throw new Error('action must be show, hide, quit or restart')
+    }
+  },
+  cancel_action: {
+    args: '{}',
+    desc: 'Cancel whatever is waiting for approval (the user said no).',
+    run: () => {
+      if (!memory().pending) return { ok: false, problem: 'Nothing is waiting for approval.' }
+      remember({ pending: null })
+      return { cancelled: true }
+    }
+  },
+  send_list: {
+    args: '{"what": "verified_emails"|"emails"|"businesses"|"replies"|"interested", "category"?: string, "today"?: boolean, "limit"?: number}',
+    desc: 'Send the user a full list as a separate message (verified emails, all emails, businesses, recent client replies, interested customers). Use this instead of writing long lists yourself.',
+    run: (a) => {
+      const limit = Math.min(Math.max(Number(a.limit) || 300, 1), 2000)
+      const cat = a.category ? categoryOrThrow(a.category) : null
+      const catSql = cat ? ` AND l.category_id = ${cat.id}` : ''
+      const what = norm(a.what)
+      let lines: string[] = []
+      let title = ''
+      if (what === 'verified_emails' || what === 'emails') {
+        const verified = what === 'verified_emails'
+        const today = a.today ? " AND (ea.last_verified_at >= date('now') OR EXISTS (SELECT 1 FROM verification_records vr WHERE vr.email_id = ea.id AND vr.created_at >= date('now')))" : ''
+        const rows = db().all<{ email: string; business_name: string; status: string }>(
+          `SELECT DISTINCT ea.email, l.business_name, ea.verification_status status FROM email_addresses ea JOIN lead_emails le ON le.email_id = ea.id JOIN leads l ON l.id = le.lead_id
+           WHERE l.deleted_at IS NULL ${verified ? "AND ea.verification_status IN ('safe','risky')" : ''}${catSql}${today} ORDER BY l.business_name LIMIT ?`,
+          limit
+        )
+        title = `${verified ? 'Verified emails' : 'Emails'}${cat ? ` — ${cat.name}` : ''}${a.today ? ' (today)' : ''}: ${rows.length}`
+        lines = rows.map((r) => `${r.email} — ${r.business_name}${verified ? '' : ` (${r.status})`}`)
+      } else if (what === 'businesses') {
+        const rows = db().all<any>(
+          `SELECT l.business_name, l.city, l.phone, l.website, (SELECT ea.email FROM lead_emails le JOIN email_addresses ea ON ea.id = le.email_id WHERE le.lead_id = l.id ORDER BY le.is_primary DESC LIMIT 1) email
+           FROM leads l WHERE l.deleted_at IS NULL${catSql} ORDER BY l.id DESC LIMIT ?`,
+          limit
+        )
+        title = `Businesses${cat ? ` — ${cat.name}` : ''}: ${rows.length}`
+        lines = rows.map((r) => [r.business_name, r.city, r.phone, r.email ?? r.website].filter(Boolean).join(' · '))
+      } else if (what === 'replies') {
+        const rows = db().all<any>(
+          `SELECT m.body, m.created_at, c.channel, c.address, l.business_name FROM messages m JOIN conversations c ON c.id = m.conversation_id LEFT JOIN leads l ON l.id = c.lead_id
+           WHERE m.direction = 'in' AND m.created_at >= ${a.today === false ? "datetime('now','-7 days')" : "datetime('now','-1 day')"} ORDER BY m.id DESC LIMIT ?`,
+          limit
+        )
+        title = `Client replies (${a.today === false ? 'last 7 days' : 'last 24 hours'}): ${rows.length}`
+        lines = rows.map((r) => `${r.business_name ?? r.address} (${r.channel}): ${String(r.body).slice(0, 300)}`)
+      } else if (what === 'interested') {
+        const rows = db().all<any>(
+          `SELECT l.business_name, l.phone, (SELECT ea.email FROM lead_emails le JOIN email_addresses ea ON ea.id = le.email_id WHERE le.lead_id = l.id LIMIT 1) email,
+             (SELECT summary FROM conversations c WHERE c.lead_id = l.id ORDER BY c.id DESC LIMIT 1) summary
+           FROM leads l WHERE l.outreach_status = 'interested' AND l.deleted_at IS NULL${catSql} ORDER BY l.updated_at DESC LIMIT ?`,
+          limit
+        )
+        title = `Interested customers: ${rows.length}`
+        lines = rows.map((r) => `${r.business_name} · ${r.phone ?? r.email ?? ''}${r.summary ? `\n   ${String(r.summary).slice(0, 200)}` : ''}`)
+      } else throw new Error('what must be verified_emails, emails, businesses, replies or interested')
+      const text = lines.length ? `${title}\n\n${lines.join('\n')}` : `${title}\n(nothing found)`
+      addMessage('assistant', text, { attachment: true })
+      return { sent_to_user: true, items: lines.length, title }
+    }
+  },
+  get_conversation: {
+    args: '{"customer": string (name, email or phone), "limit"?: number}',
+    desc: 'Send the user the latest messages of one customer conversation.',
+    run: (a) => {
+      const q = `%${norm(a.customer).replace(/^\+/, '')}%`
+      const c = db().get<any>(
+        `SELECT c.id, c.channel, c.address, c.ai_mode, c.interest, l.business_name FROM conversations c LEFT JOIN leads l ON l.id = c.lead_id
+         WHERE c.address LIKE ? OR l.business_name LIKE ? OR l.contact_name LIKE ? ORDER BY c.last_message_at DESC LIMIT 1`,
+        q, q, q
+      )
+      if (!c) throw new Error(`No conversation found for "${norm(a.customer)}".`)
+      const msgs = db()
+        .all<any>("SELECT direction, author, body, created_at FROM messages WHERE conversation_id = ? AND author != 'system' ORDER BY id DESC LIMIT ?", c.id, Math.min(Number(a.limit) || 15, 50))
+        .reverse()
+      const text = `${c.business_name ?? c.address} (${c.channel}, AI ${c.ai_mode}, ${c.interest})\n\n${msgs.map((m) => `${m.direction === 'in' ? '👤' : m.author === 'ai' ? '🤖' : '🧑'} ${m.created_at.slice(5, 16)}  ${String(m.body).slice(0, 500)}`).join('\n\n')}`
+      addMessage('assistant', text, { attachment: true })
+      return { sent_to_user: true, conversation_id: c.id, customer: c.business_name ?? c.address, messages: msgs.length }
+    }
+  },
   change_setting: {
     args: '{"changes": {"section.key": value, ...}}',
     desc: `Change any app setting directly (other settings are kept). Settings: ${settingsList()}`,
@@ -623,6 +750,11 @@ async function runPending(): Promise<any> {
     for (const id of p.ids) leads.deleteCategory(id)
     bus.publish('leads:changed', {})
     return { done: true, deleted_categories: p.ids.length }
+  }
+  if (p.kind === 'app') {
+    if (!appControls) throw new Error('Window controls are not available.')
+    setTimeout(() => (p.action === 'quit' ? appControls!.quit() : appControls!.restart()), 4000)
+    return { done: true, action: p.action, note: p.action === 'quit' ? 'The software will turn off in a few seconds.' : 'Restarting in a few seconds.' }
   }
   if (p.kind === 'delete_leads') {
     const n = leads.deleteLeads(p.ids, false)
@@ -864,14 +996,18 @@ const TOOL_WORDS: Record<string, string> = {
 }
 
 /** Handles one user message: runs tools until the model gives a final answer. */
-export async function ask(text: string): Promise<void> {
+export async function ask(text: string, opts: { via?: 'app' | 'whatsapp' } = {}): Promise<void> {
   const msg = norm(text)
   if (!msg) return
   if (running) throw new Error('Still working on your last message — wait a moment or press Stop.')
   scrubStoredSecrets()
   const cred = extractCredentials(msg)
+  const viaNote =
+    opts.via === 'whatsapp'
+      ? '\n\nTHIS MESSAGE CAME FROM THE OWNER ON WHATSAPP (remote control). Answer like a WhatsApp message: short plain text, *bold* allowed, no markdown tables or headings, no buttons. When something waits for approval, end with: Reply *yes* to confirm or *no* to cancel. Use send_list / get_conversation for long lists. If the request is unclear, ask one short question before doing anything.'
+      : ''
   // The password never reaches the AI provider or the chat history: it is masked before anything is stored or sent.
-  const userMessageId = addMessage('user', cred ? cred.redacted : msg)
+  const userMessageId = addMessage('user', cred ? cred.redacted : msg, opts.via === 'whatsapp' ? { via: 'whatsapp' } : undefined)
   if (cred) {
     running = { ctl: new AbortController() }
     bus.publish('assistant:busy', { busy: true })
@@ -914,7 +1050,7 @@ export async function ask(text: string): Promise<void> {
     let guardRetries = 0
     for (let step = 0; step < 8; step++) {
       if (ctl.signal.aborted) throw new Error('Stopped.')
-      const raw = await callModel({ purpose: 'assistant', system: systemPrompt() + langHint(msg), messages: convo, maxTokens: 400, schema: replySchema() }, ctl.signal)
+      const raw = await callModel({ purpose: 'assistant', system: systemPrompt() + langHint(msg) + viaNote, messages: convo, maxTokens: 400, schema: replySchema() }, ctl.signal)
       if (process.env.LGE_DEBUG_ASSISTANT) console.error('RAW', new Date().toISOString().slice(11, 19), raw._meta?.inputTokens, raw._meta?.outputTokens, raw._meta?.text)
       let r = readReply(raw)
       if (ctl.signal.aborted) throw new Error('Stopped.')
@@ -923,7 +1059,7 @@ export async function ask(text: string): Promise<void> {
         r = readReply(
           await callModel({
             purpose: 'assistant',
-            system: systemPrompt() + langHint(msg),
+            system: systemPrompt() + langHint(msg) + viaNote,
             messages: [...convo, { role: 'assistant', content: '{}' }, { role: 'user', content: 'Your answer was empty. Do what I asked: return {"say": ..., "calls": [...]} with the tool calls needed, or the final answer.' }],
             maxTokens: 400,
             schema: replySchema()
@@ -995,6 +1131,7 @@ export async function confirmPending(): Promise<void> {
       addMessage('assistant', r.scheduled ? `Scheduled. ${r.recipients} businesses will be emailed.` : `Campaign started — ${r.recipients} businesses will be emailed, one every few minutes. No email has gone out yet; I’ll show progress here.`, { buttons: [r._button] })
     else if (p.kind === 'delete_categories') addMessage('assistant', `Done — ${r.deleted_categories} categor${r.deleted_categories > 1 ? 'ies' : 'y'} deleted.`)
     else if (p.kind === 'delete_leads') addMessage('assistant', `Done — ${r.deleted_businesses} businesses deleted.`)
+    else if (p.kind === 'app') addMessage('assistant', r.note)
     else addMessage('assistant', 'Done ✓')
   } catch (e: any) {
     addMessage('assistant', `Could not do it: ${e.message}`, { error: true })
@@ -1022,3 +1159,23 @@ export function liveStatus() {
 
 export const toolNames = () => Object.keys(TOOLS)
 export const runToolForTests = (name: string, args: any, userMessageId = 1) => TOOLS[name].run(args, { userMessageId })
+
+/**
+ * Runs an owner command that arrived on WhatsApp through the same assistant (same tools, approvals
+ * and history as the in-app chat) and returns what should be sent back: the answer plus any lists.
+ */
+export async function askRemote(text: string, waitMs = 180_000): Promise<string[]> {
+  const t0 = Date.now()
+  while (running && Date.now() - t0 < waitMs) await new Promise((r) => setTimeout(r, 1000))
+  if (running) return ['I am still busy with the previous command. Please send this again in a minute.']
+  const before = db().get<{ id: number }>('SELECT MAX(id) id FROM assistant_messages')?.id ?? 0
+  await ask(text, { via: 'whatsapp' })
+  const out = db()
+    .all<{ role: string; content: string; data: string | null }>("SELECT role, content, data FROM assistant_messages WHERE id > ? AND role = 'assistant' ORDER BY id", before)
+    .map((m) => {
+      const d = m.data ? JSON.parse(m.data) : {}
+      const approve = (d.buttons ?? []).some((b: Button) => b.action === 'confirm') && memory().pending && !/reply \*?yes/i.test(m.content)
+      return approve ? `${m.content}\n\nReply *yes* to confirm or *no* to cancel.` : m.content
+    })
+  return out.length ? out : ['Done.']
+}

@@ -20,6 +20,7 @@ import * as templates from './services/templates'
 import * as assistant from './services/ai/assistant'
 import * as knowledge from './services/knowledge'
 import * as autoAgent from './services/ai/autoAgent'
+import * as remote from './services/remoteAdmin'
 import * as analytics from './services/analytics'
 import * as gmaps from './services/maps'
 import * as license from './services/subscription'
@@ -290,6 +291,13 @@ const handlers: Record<string, Handler> = {
   'campaigns:resume': (id: number) => campaigns.resumeCampaign(id),
   'campaigns:stop': (id: number) => campaigns.stopCampaign(id),
   'campaigns:preview': (id: number, leadId: number, step?: number) => campaigns.previewMessage(id, leadId, step),
+  'remote:status': () => remote.remoteStatus(),
+  'remote:sendCode': () => remote.sendVerificationCode(),
+  'remote:test': async () => {
+    if (!getSettings().remoteAdmin.verified) throw new Error('Verify the admin number first.')
+    if (!(await remote.sendToAdmin('👋 Test from Lead Getter — remote control is connected.'))) throw new Error('Could not send. Is the WhatsApp account connected?')
+    return true
+  },
   'knowledge:list': () => knowledge.listKnowledge(),
   'knowledge:save': (item) => knowledge.saveKnowledge(item),
   'knowledge:delete': (id: number) => knowledge.deleteKnowledge(id),

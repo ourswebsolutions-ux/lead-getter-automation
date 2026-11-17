@@ -195,7 +195,8 @@ export function recordIncoming(p: {
     return { conversationId: conv.id, messageId }
   }
 
-  bus.publish('notify', { title: `New ${p.channel === 'whatsapp' ? 'WhatsApp' : 'email'} reply`, body: p.body.slice(0, 120), conversationId: conv.id })
+  const who = (conv.lead_id && db().get<{ n: string }>('SELECT COALESCE(contact_name, business_name) n FROM leads WHERE id = ?', conv.lead_id)?.n) || (p.channel === 'whatsapp' ? `+${conv.address}` : conv.address)
+  bus.publish('notify', { kind: 'reply', title: `New ${p.channel === 'whatsapp' ? 'WhatsApp' : 'email'} reply`, body: `${who}: ${p.body.slice(0, 300)}`, conversationId: conv.id })
   incomingHandler?.(conv.id, messageId)
   return { conversationId: conv.id, messageId }
 }

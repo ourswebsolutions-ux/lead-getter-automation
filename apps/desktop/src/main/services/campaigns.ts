@@ -257,6 +257,7 @@ export function stopCampaign(id: number): void {
 // ---------------------------------------------------------------- engine
 
 const inFlight = new Set<number>()
+const lastErrorNotice = new Map<number, number>()
 const nextAt = new Map<number, number>()
 let timer: NodeJS.Timeout | null = null
 
@@ -411,6 +412,10 @@ async function processCampaign(c: any): Promise<void> {
       r.id
     )
     exec(c.id, 'failed', e.message.slice(0, 300), r.id)
+    if (Date.now() - (lastErrorNotice.get(c.id) ?? 0) > 3600_000) {
+      lastErrorNotice.set(c.id, Date.now())
+      bus.publish('notify', { kind: 'error', title: 'Campaign send failed', body: `${c.name} → ${r.address}: ${e.message.slice(0, 160)}` })
+    }
     log.warn(`Campaign ${c.id} → ${r.address}: ${e.message}`)
   }
   nextAt.set(c.id, Date.now() + nextDelayMs(cfg))

@@ -1,4 +1,5 @@
 import { db } from '../db'
+import { bus } from './events'
 import { DEFAULT_SETTINGS, type AppSettings } from '@shared/settings'
 
 export function getSettings(): AppSettings {
@@ -36,5 +37,6 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
       )
     }
   })
+  bus.publish('settings:updated', { keys: Object.keys(patch) })
   return getSettings()
 }

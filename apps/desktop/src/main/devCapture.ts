@@ -93,6 +93,11 @@ export async function runCapture(dir: string): Promise<void> {
       writeFileSync(join(dir, `${theme}-${p}.png`), img.toPNG())
     }
   }
+  await win.webContents.executeJavaScript(`localStorage.setItem('lge.page', '"settings"'); location.reload(); true`)
+  await new Promise((r) => setTimeout(r, 2500))
+  await win.webContents.executeJavaScript(`[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'WhatsApp Remote Admin').click(); true`)
+  await new Promise((r) => setTimeout(r, 1500))
+  writeFileSync(join(dir, 'light-remote.png'), (await win.webContents.capturePage()).toPNG())
   await win.webContents.executeJavaScript(`localStorage.setItem('lge.page', '"email-campaigns"'); location.reload(); true`)
   await new Promise((r) => setTimeout(r, 2500))
   await win.webContents.executeJavaScript(`[...document.querySelectorAll('button')].find((b) => b.textContent.includes('New campaign')).click(); true`)

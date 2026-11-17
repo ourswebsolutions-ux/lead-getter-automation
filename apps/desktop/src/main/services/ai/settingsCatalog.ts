@@ -42,7 +42,17 @@ export const SETTINGS_INFO: Record<string, { about: string; kind: Kind; min?: nu
   'pricing.currency': { about: 'currency for price suggestions (e.g. PKR, USD)', kind: 'text' },
   'pricing.notes': { about: 'standing pricing notes', kind: 'text' },
   'notifications.desktop': { about: 'desktop notifications', kind: 'boolean' },
-  'appearance.theme': { about: 'theme', kind: { oneOf: ['light', 'dark', 'system'] } }
+  'appearance.theme': { about: 'theme', kind: { oneOf: ['light', 'dark', 'system'] } },
+  'remoteAdmin.enabled': { about: 'WhatsApp remote control on/off (the admin number itself is only changed in Settings)', kind: 'boolean' },
+  'remoteAdmin.notifyReplies': { about: 'WhatsApp me every new client reply', kind: 'boolean' },
+  'remoteAdmin.notifyInterested': { about: 'WhatsApp me when a customer is interested', kind: 'boolean' },
+  'remoteAdmin.notifyPricing': { about: 'WhatsApp me price questions / things that need me', kind: 'boolean' },
+  'remoteAdmin.notifyCampaigns': { about: 'WhatsApp me when a campaign finishes', kind: 'boolean' },
+  'remoteAdmin.notifySearch': { about: 'WhatsApp me when a Google Maps search finishes', kind: 'boolean' },
+  'remoteAdmin.notifyEmails': { about: 'WhatsApp me when new verified emails are found', kind: 'boolean' },
+  'remoteAdmin.notifyErrors': { about: 'WhatsApp me about failures/errors', kind: 'boolean' },
+  'background.keepRunning': { about: 'keep running in the background when the window is closed', kind: 'boolean' },
+  'background.startWithComputer': { about: 'start automatically (in the background) when the computer turns on', kind: 'boolean' }
 }
 
 /** One line per setting for the assistant's prompt. */

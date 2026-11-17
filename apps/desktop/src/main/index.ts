@@ -17,6 +17,9 @@ import { registerEmail, startInboxPolling, stopInboxPolling } from './services/e
 import { startCampaignEngine, stopCampaignEngine } from './services/campaigns'
 import { initSubscription } from './services/subscription'
 import { recoverSearches, shutdownMaps, startBackground as startMapsBackground } from './services/maps'
+import { setupTray, hideInsteadOfClose, applyStartWithComputer, startedHidden } from './core/background'
+import { startRemoteAdmin, announceShutdown } from './services/remoteAdmin'
+import { setAppControls } from './services/ai/assistant'
 
 // Separate identity from any other "Lead Getter" install: own userData dir, own DB, own sessions.
 app.setName('Lead Getter Enterprise')
@@ -25,6 +28,8 @@ app.setPath('userData', !app.isPackaged && process.env.LGE_USER_DATA ? process.e
 const log = logger('main')
 let mainWindow: BrowserWindow | null = null
 let quitting = false
+const startedAt = Date.now()
+let firstWindow = true
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
@@ -91,7 +96,13 @@ function createWindow(): void {
       spellcheck: true
     }
   })
-  mainWindow.once('ready-to-show', () => mainWindow?.show())
+  // Started with the computer (--background): keep working without opening the window.
+  const hidden = firstWindow && startedHidden()
+  firstWindow = false
+  mainWindow.once('ready-to-show', () => !hidden && mainWindow?.show())
+  mainWindow.on('close', (e) => {
+    if (mainWindow && hideInsteadOfClose(mainWindow, quitting)) e.preventDefault()
+  })
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//.test(url)) void shell.openExternal(url)
     return { action: 'deny' }
@@ -167,6 +178,29 @@ app.whenReady().then(async () => {
   registerIpc()
   forwardEvents()
   createWindow()
+  setupTray(() => mainWindow ?? (createWindow(), mainWindow), () => app.quit())
+  applyStartWithComputer()
+  bus.on('event', (evt: { type: string }) => evt.type === 'settings:updated' && applyStartWithComputer())
+  setAppControls({
+    status: () => ({
+      running_for_minutes: Math.round((Date.now() - startedAt) / 60000),
+      window: !mainWindow ? 'closed (running in background)' : mainWindow.isVisible() ? (mainWindow.isMinimized() ? 'minimized' : 'open') : 'hidden (running in background)',
+      keeps_running_when_closed: getSettings().background.keepRunning,
+      starts_with_computer: getSettings().background.startWithComputer
+    }),
+    show: () => {
+      if (!mainWindow) createWindow()
+      mainWindow?.show()
+      mainWindow?.focus()
+    },
+    hide: () => mainWindow?.hide(),
+    quit: () => app.quit(),
+    restart: () => {
+      app.relaunch({ args: process.argv.slice(1).filter((a) => a !== '--background') })
+      app.quit()
+    }
+  })
+  startRemoteAdmin()
 
   startJobRunner()
   startCampaignEngine()
@@ -193,14 +227,17 @@ app.whenReady().then(async () => {
 })
 
 app.on('second-instance', () => {
+  if (!mainWindow) createWindow()
   if (mainWindow) {
     if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
     mainWindow.focus()
   }
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
+  // With "keep running" on, automations continue with no window (tray icon to reopen).
+  if (process.platform !== 'darwin' && !getSettings().background.keepRunning) app.quit()
 })
 
 app.on('before-quit', async (e) => {
@@ -209,6 +246,7 @@ app.on('before-quit', async (e) => {
   quitting = true
   log.info('Shutting down…')
   try {
+    await announceShutdown()
     stopCampaignEngine()
     stopInboxPolling()
     await stopJobRunner()

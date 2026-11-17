@@ -165,6 +165,8 @@ async function verifyAllPending(): Promise<void> {
   const startPending = pendingNow()
   if (!startPending) return
   verifyingBusy = true
+  const verifiedCount = () => db().get<{ n: number }>("SELECT COUNT(*) n FROM email_addresses WHERE verification_status IN ('safe','risky')")!.n
+  const verifiedBefore = verifiedCount()
   round = { done: 0, total: startPending }
   publish()
   const inFlight = new Set<string>()
@@ -191,6 +193,8 @@ async function verifyAllPending(): Promise<void> {
   } finally {
     verifyingBusy = false
     publish()
+    const found = verifiedCount() - verifiedBefore
+    if (found > 0) bus.publish('notify', { kind: 'emails', title: 'New verified emails', body: `${found} new verified email${found > 1 ? 's' : ''} (${verifiedCount()} in total).` })
   }
 }
 

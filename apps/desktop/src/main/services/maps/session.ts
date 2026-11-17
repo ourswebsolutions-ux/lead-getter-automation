@@ -26,6 +26,8 @@ export interface SearchInput {
   category: string
   businessType: BusinessType
   findEmails: boolean
+  /** Stop after this many new businesses are saved (0/undefined = no limit). */
+  maxResults?: number
 }
 
 export interface Stats {
@@ -79,6 +81,14 @@ export class MapsSearch {
       state, message, this.stats.processed, this.stats.saved, this.stats.duplicates, this.stats.skipped, this.stats.emails, state, this.id
     )
     bus.publish('maps:status', { searchId: this.id, state, message, ...this.stats })
+    if (state === 'completed' || state === 'stopped' || state === 'error') {
+      const q = `${this.input.keyword}${this.input.location ? ` in ${this.input.location}` : ''}`
+      bus.publish('notify', {
+        kind: state === 'error' ? 'error' : 'search',
+        title: state === 'error' ? 'Google Maps search failed' : 'Google Maps search finished',
+        body: `${q}${this.input.category ? ` → ${this.input.category}` : ''}: ${message}`
+      })
+    }
   }
 
   // ------------------------------------------------------------ abort-aware primitives
@@ -189,6 +199,7 @@ export class MapsSearch {
       const links = await this.op(() => maps.collectLinks(page))
       const fresh = links.filter((l) => !this.seenUrls.has(l.url))
       for (const link of fresh) {
+        if (this.reachedLimit()) return
         this.seenUrls.add(link.url)
         await this.processListing(link, page)
         if (!(await this.op(() => maps.returnToResults(page)))) {
@@ -199,6 +210,7 @@ export class MapsSearch {
           break
         }
       }
+      if (this.reachedLimit()) return
       if (fresh.length || links.length > lastCount) idle = 0
       else if (endSeen || ++idle >= 6) return
       lastCount = links.length
@@ -207,6 +219,10 @@ export class MapsSearch {
       if (scroll.end) endSeen = true
       await this.pause(this.pacing.scroll)
     }
+  }
+
+  private reachedLimit(): boolean {
+    return !!this.input.maxResults && this.stats.saved >= this.input.maxResults
   }
 
   private async processListing(link: { url: string; name: string }, page: Page, alreadyOpen = false) {
