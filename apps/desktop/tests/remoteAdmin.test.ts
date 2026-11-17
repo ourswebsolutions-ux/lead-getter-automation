@@ -16,6 +16,11 @@ vi.mock('../src/main/services/whatsapp', () => ({
   setAdminHandler: (fn: any) => (handler = fn),
   markConversationRead: async () => {}
 }))
+const computerCalls: string[] = []
+vi.mock('../src/main/core/computer', () => ({
+  computerAction: async (a: string) => (computerCalls.push(a), { done: true, action: a, method: 'test' }),
+  canDo: async (a: string) => (a === 'sleep' ? { ok: false, why: 'This computer does not allow sleep (no).' } : { ok: true })
+}))
 vi.mock('../src/main/services/maps', () => ({ startSearch: () => ({ searchId: 1 }), activeSearch: () => null, stopSearch: () => {}, setMapsOptions: () => {} }))
 
 import * as R from '../src/main/services/remoteAdmin'
@@ -101,5 +106,48 @@ describe('WhatsApp remote admin', () => {
     bus.publish('notify', { kind: 'search', title: 'Google Maps search finished', body: 'done' })
     await settle()
     expect(outbox.map((o) => o.text)).toEqual(['💬 *New email reply*\nSara: price?'])
+  })
+})
+
+describe('computer control from WhatsApp', () => {
+  beforeEach(() => {
+    freshDb()
+    outbox.length = 0
+    script.length = 0
+    computerCalls.length = 0
+    db().run("INSERT INTO whatsapp_accounts (id, label, status) VALUES (1, 'Business', 'connected')")
+    updateSettings({ remoteAdmin: { ...getSettings().remoteAdmin, enabled: true, number: ADMIN, verified: true } })
+  })
+
+  it('locks right away, powers off only after yes, and says honestly when it cannot', async () => {
+    script.push({ say: '', calls: [{ tool: 'computer', args: { action: 'lock' } }] })
+    script.push({ say: 'PC lock ho gaya.', calls: [] })
+    handler(1, ADMIN, 'mera pc lock kr do')
+    await settle()
+    expect(computerCalls).toEqual(['lock'])
+    expect(outbox.at(-1)!.text).toBe('PC lock ho gaya.')
+
+    script.push({ say: '', calls: [{ tool: 'computer', args: { action: 'power off' } }] })
+    script.push({ say: 'Computer band karna hai?', calls: [] })
+    handler(1, ADMIN, 'laptop power off kr do')
+    await settle()
+    expect(computerCalls).toEqual(['lock'])
+    expect(outbox.at(-1)!.text).toMatch(/Reply \*yes\*/)
+    vi.useFakeTimers({ toFake: ['setTimeout'], shouldAdvanceTime: true })
+    script.push({ say: '', calls: [{ tool: 'confirm_action', args: {} }] })
+    script.push({ say: 'Computer kuch second mein band ho jayega.', calls: [] })
+    handler(1, ADMIN, 'yes')
+    await settle()
+    vi.advanceTimersByTime(9000)
+    vi.useRealTimers()
+    expect(computerCalls).toEqual(['lock', 'shutdown'])
+
+    script.push({ say: '', calls: [{ tool: 'computer', args: { action: 'sleep' } }] })
+    script.push({ say: 'Ye computer sleep support nahi karta.', calls: [] })
+    handler(1, ADMIN, 'pc ko sula do')
+    await settle()
+    expect(computerCalls).toEqual(['lock', 'shutdown'])
+    const { generateJson } = await import('../src/main/services/ai/providers')
+    expect(JSON.stringify((generateJson as any).mock.calls.at(-1)[0].messages)).toContain('does not allow sleep')
   })
 })

@@ -15,6 +15,7 @@ import { CATALOG, CATALOG_CHANNELS } from './assistantCatalog'
 import * as knowledge from '../knowledge'
 import { writeTemplate } from './writer'
 import { changeSettings, findSettings, settingsList } from './settingsCatalog'
+import { computerAction, canDo } from '../../core/computer'
 import type { LeadFilter } from '@shared/types'
 
 /**
@@ -43,6 +44,7 @@ export type Pending = { summary: string; label: string; afterMessageId: number }
   | { kind: 'delete_categories'; ids: number[] }
   | { kind: 'delete_leads'; ids: number[] }
   | { kind: 'app'; action: 'quit' | 'restart' }
+  | { kind: 'computer'; action: 'sleep' | 'shutdown' | 'restart' }
 )
 
 /** Window / process controls provided by the main process (index.ts). */
@@ -510,6 +512,31 @@ const TOOLS: Record<string, Tool> = {
       throw new Error('action must be show, hide, quit or restart')
     }
   },
+  computer: {
+    args: '{"action": "lock"|"sleep"|"shutdown"|"restart"}',
+    desc: 'Control the computer (Windows, Linux, Mac): lock the screen now (the software keeps running and WhatsApp control keeps working); sleep, shut down (power off) or restart ask for approval first.',
+    run: async (a, ctx) => {
+      const act = norm(a.action).toLowerCase().replace('power off', 'shutdown').replace('poweroff', 'shutdown').replace('reboot', 'restart') as any
+      if (act === 'lock') return { ...(await computerAction('lock')), note: 'Screen locked. The software keeps running; WhatsApp commands still work.' }
+      if (act === 'sleep' || act === 'shutdown' || act === 'restart') {
+        const can = await canDo(act)
+        if (!can.ok) return { ok: false, problem: can.why }
+        return requestApproval(
+          {
+            kind: 'computer',
+            action: act,
+            summary:
+              act === 'restart'
+                ? 'Restart the computer. Remote control stops until it is back on and the software is running again (turn on "Start with the computer").'
+                : `${act === 'sleep' ? 'Put the computer to sleep' : 'Turn the computer OFF'}. After this nothing runs — no WhatsApp commands, campaigns or AI replies — until someone turns it on again.`,
+            label: act === 'sleep' ? 'Yes, sleep' : act === 'restart' ? 'Yes, restart' : 'Yes, power off'
+          },
+          ctx
+        )
+      }
+      throw new Error('action must be lock, sleep, shutdown or restart')
+    }
+  },
   cancel_action: {
     args: '{}',
     desc: 'Cancel whatever is waiting for approval (the user said no).',
@@ -750,6 +777,18 @@ async function runPending(): Promise<any> {
     for (const id of p.ids) leads.deleteCategory(id)
     bus.publish('leads:changed', {})
     return { done: true, deleted_categories: p.ids.length }
+  }
+  if (p.kind === 'computer') {
+    // Tell the WhatsApp admin first, then act a few seconds later (the reply has to go out before the power goes).
+    setTimeout(
+      () =>
+        void computerAction(p.action).catch((e) => {
+          log.error('Computer action failed', e)
+          bus.publish('notify', { kind: 'error', title: `Could not ${p.action === 'shutdown' ? 'power off' : p.action} the computer`, body: e.message.slice(0, 300) })
+        }),
+      8000
+    )
+    return { done: true, action: p.action, note: `The computer will ${p.action === 'shutdown' ? 'power off' : p.action} in a few seconds.` }
   }
   if (p.kind === 'app') {
     if (!appControls) throw new Error('Window controls are not available.')
@@ -1131,7 +1170,7 @@ export async function confirmPending(): Promise<void> {
       addMessage('assistant', r.scheduled ? `Scheduled. ${r.recipients} businesses will be emailed.` : `Campaign started — ${r.recipients} businesses will be emailed, one every few minutes. No email has gone out yet; I’ll show progress here.`, { buttons: [r._button] })
     else if (p.kind === 'delete_categories') addMessage('assistant', `Done — ${r.deleted_categories} categor${r.deleted_categories > 1 ? 'ies' : 'y'} deleted.`)
     else if (p.kind === 'delete_leads') addMessage('assistant', `Done — ${r.deleted_businesses} businesses deleted.`)
-    else if (p.kind === 'app') addMessage('assistant', r.note)
+    else if (p.kind === 'app' || p.kind === 'computer') addMessage('assistant', r.note)
     else addMessage('assistant', 'Done ✓')
   } catch (e: any) {
     addMessage('assistant', `Could not do it: ${e.message}`, { error: true })
