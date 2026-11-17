@@ -337,8 +337,9 @@ export async function pollInbox(id: number): Promise<{ processed: number }> {
     }
     await client.logout()
   } catch (e: any) {
-    log.warn(`IMAP poll failed for account ${id}: ${e.message}`)
-    db().run('UPDATE smtp_accounts SET last_error = ? WHERE id = ?', `IMAP: ${e.message}`, id)
+    const why = [e.message, e.responseText, e.code, e.authenticationFailed && 'login rejected'].filter(Boolean).join(' · ') || String(e)
+    log.warn(`IMAP poll failed for account ${id}: ${why}`)
+    db().run('UPDATE smtp_accounts SET last_error = ? WHERE id = ?', `IMAP: ${why}`, id)
     try {
       client.close()
     } catch {

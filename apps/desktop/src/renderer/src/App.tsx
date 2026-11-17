@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactElement } from 'react'
+import { Component, useCallback, useEffect, useState, type ReactElement, type ReactNode } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { ConfirmHost, Toasts } from './components/ui'
 import { SubscriptionButton } from './components/Subscription'
@@ -82,11 +82,39 @@ export function App() {
             <WhatsAppMenu />
             <SubscriptionButton />
           </div>
-          <Page key={nav.page + JSON.stringify(nav.params)} />
+          <PageBoundary key={nav.page + JSON.stringify(nav.params)} onHome={() => go('assistant')}>
+            <Page />
+          </PageBoundary>
         </main>
       </div>
       <Toasts />
       <ConfirmHost />
     </NavContext.Provider>
   )
+}
+
+/** If one screen crashes, show the error there instead of a blank window; the sidebar keeps working. */
+class PageBoundary extends Component<{ children: ReactNode; onHome: () => void }, { error: Error | null }> {
+  state = { error: null as Error | null }
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+  componentDidCatch(error: Error) {
+    console.error('Screen crashed:', error)
+  }
+  render() {
+    if (!this.state.error) return this.props.children
+    return (
+      <div className="page">
+        <div className="page-inner" style={{ maxWidth: 560, paddingTop: '12vh', textAlign: 'center' }}>
+          <h2 style={{ marginBottom: 6 }}>This screen hit a problem</h2>
+          <p className="muted" style={{ fontSize: 13 }}>{this.state.error.message}</p>
+          <div className="row" style={{ justifyContent: 'center', gap: 8, marginTop: 16 }}>
+            <button className="btn" onClick={() => location.reload()}>Reload</button>
+            <button className="btn primary" onClick={this.props.onHome}>Go to AI Assistant</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 }

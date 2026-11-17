@@ -117,6 +117,8 @@ function Workspace({ id }: { id: number }) {
     if (c && notes === null) setNotes(c.lead_notes ?? '')
   }, [c])
   useEvent('conversation:message', (p) => p.conversationId === id && reload(), [id])
+  // Must stay above the early returns below (React hooks run in the same order on every render).
+  const { data: aiDue, reload: reloadPending } = useQuery<any>('agent:pendingFor', [id], { events: ['agent:*'], poll: 30000 })
 
   if (!c)
     return (
@@ -144,7 +146,6 @@ function Workspace({ id }: { id: number }) {
         reload()
       }
     })
-  const { data: aiDue, reload: reloadPending } = useQuery<any>('agent:pendingFor', [id], { events: ['agent:*'], poll: 30000 })
   const setMode = (m: string, msg: string) => run('m', () => rpc('conversations:setAiMode', id, m), { success: msg }).then(reload)
   const update = (patch: any, msg?: string) => run('u', () => rpc('conversations:update', id, patch), msg ? { success: msg } : {}).then(reload)
 
