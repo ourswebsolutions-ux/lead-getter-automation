@@ -318,6 +318,8 @@ export async function pollInbox(id: number): Promise<{ processed: number }> {
         if (from && (BOUNCE_FROM.test(from) || BOUNCE_SUBJ.test(subject))) {
           const bounced = extractBouncedRecipient(body)
           if (bounced) handleBounce(bounced, subject)
+        } else if (from && db().get('SELECT 1 FROM smtp_accounts WHERE from_email = ? COLLATE NOCASE', from)) {
+          // Mail from one of our own accounts (self-sent, or our own reply copied back) is never treated as a customer message.
         } else if (from) {
           const known = findLeadByAddress('email', from) || db().get("SELECT 1 FROM conversations WHERE channel = 'email' AND address = ?", from)
           const clean = stripQuoted(body) || body.slice(0, 4000)

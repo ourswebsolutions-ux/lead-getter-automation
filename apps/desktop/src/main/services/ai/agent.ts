@@ -341,10 +341,8 @@ export async function runTurn(convId: number, opts: { triggerId?: number } = {})
     )
     if (!last || last.direction !== 'in') return { action: 'nothing_to_answer' }
     if (opts.triggerId && last.id < opts.triggerId) return { action: 'nothing_to_answer' }
-    if (db().get("SELECT 1 FROM approvals WHERE conversation_id = ? AND kind = 'pricing' AND status IN ('pending','needs_pricing_config')", convId)) {
-      bus.publish('notify', { title: 'Customer wrote while a price approval is open', body: last.body.slice(0, 100), conversationId: convId })
-      return { action: 'awaiting_pricing_approval' }
-    }
+    // While you are deciding on a price the agent keeps reading (opt-outs, complaints) but does not answer by itself.
+    const pricePending = !!db().get("SELECT 1 FROM approvals WHERE conversation_id = ? AND kind = 'pricing' AND status IN ('pending','needs_pricing_config')", convId)
     const recent = lastAiReplies(convId)
 
     const a = await generateJson<TurnAnalysis>({
@@ -394,6 +392,11 @@ Read the whole conversation and the customer's latest message, then return JSON:
       return { action: 'opted_out', decision }
     }
 
+    if (pricePending) {
+      const sensitiveNow = SENSITIVE.has(a.intent) || a.needs_human
+      bus.publish('notify', { title: sensitiveNow ? 'The agent needs you' : 'Customer wrote while a price approval is open', body: (a.human_reason || last.body).slice(0, 120), conversationId: convId })
+      return { action: 'awaiting_pricing_approval', decision }
+    }
     let reply = (a.reply ?? '').trim()
     const invented = reply ? unknownAmounts(reply) : []
     const pricingQ = a.intent === 'pricing' || detectPricingIntent(last.body)

@@ -104,7 +104,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   crawler: { maxPagesPerSite: 8, respectRobots: true, concurrency: 4, delayMs: 400 },
   compliance: {
     emailFooter: 'If you would prefer not to hear from us, reply with "unsubscribe" and we will not contact you again.',
-    optOutKeywords: 'stop, unsubscribe, remove me, opt out, not interested',
+    optOutKeywords: 'stop, unsubscribe, remove me, opt out, not interested, message mat, msg mat, mat bhejo, mat bhejna, rabta mat, contact mat, band karo, band kro, نہ بھیجیں',
     whatsappOptOutNotice: 'Reply STOP if you would rather not receive messages from us.'
   },
   notifications: { desktop: true },
