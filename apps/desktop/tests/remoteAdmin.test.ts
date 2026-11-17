@@ -19,7 +19,9 @@ vi.mock('../src/main/services/whatsapp', () => ({
 const computerCalls: string[] = []
 vi.mock('../src/main/core/computer', () => ({
   computerAction: async (a: string) => (computerCalls.push(a), { done: true, action: a, method: 'test' }),
-  canDo: async (a: string) => (a === 'sleep' ? { ok: false, why: 'This computer does not allow sleep (no).' } : { ok: true })
+  canDo: async (a: string) => (a === 'sleep' ? { ok: false, why: 'This computer does not allow sleep (no).' } : { ok: true }),
+  canUnlockRemotely: () => true,
+  isLocked: async () => true
 }))
 vi.mock('../src/main/services/maps', () => ({ startSearch: () => ({ searchId: 1 }), activeSearch: () => null, stopSearch: () => {}, setMapsOptions: () => {} }))
 
@@ -149,5 +151,53 @@ describe('computer control from WhatsApp', () => {
     expect(computerCalls).toEqual(['lock', 'shutdown'])
     const { generateJson } = await import('../src/main/services/ai/providers')
     expect(JSON.stringify((generateJson as any).mock.calls.at(-1)[0].messages)).toContain('does not allow sleep')
+  })
+})
+
+describe('remote unlock with a PIN', () => {
+  beforeEach(() => {
+    freshDb()
+    outbox.length = 0
+    script.length = 0
+    computerCalls.length = 0
+    db().run("INSERT INTO whatsapp_accounts (id, label, status) VALUES (1, 'Business', 'connected')")
+    updateSettings({ remoteAdmin: { ...getSettings().remoteAdmin, enabled: true, number: ADMIN, verified: true } })
+  })
+
+  it('unlocks only with the right PIN, never shows it to the AI, and locks out after 3 wrong tries', async () => {
+    R.setUnlockPin('482913')
+    const { generateJson } = await import('../src/main/services/ai/providers')
+    ;(generateJson as any).mockClear()
+    script.push({ say: '', calls: [{ tool: 'computer', args: { action: 'unlock' } }] })
+    script.push({ say: 'Apna unlock PIN bhejen.', calls: [] })
+    handler(1, ADMIN, 'pc unlock kr do')
+    await settle()
+    expect(outbox.at(-1)!.text).toBe('Apna unlock PIN bhejen.')
+    handler(1, ADMIN, '111111')
+    await settle()
+    expect(outbox.at(-1)!.text).toMatch(/Wrong PIN/)
+    expect(computerCalls).toEqual([])
+    handler(1, ADMIN, 'unlock 482913')
+    await settle()
+    expect(outbox.at(-1)!.text).toMatch(/unlocked/)
+    expect(computerCalls).toEqual(['unlock'])
+    expect(JSON.stringify((generateJson as any).mock.calls)).not.toMatch(/482913|111111/)
+    expect(JSON.stringify(R.remoteStatus().history)).not.toMatch(/482913/)
+
+    // a plain number that was not asked for goes to the AI as a normal message
+    script.push({ say: 'ok', calls: [] })
+    handler(1, ADMIN, '1500')
+    await settle()
+    expect(computerCalls).toEqual(['unlock'])
+
+    for (const p of ['unlock 000000', 'unlock 000001', 'unlock 000002']) {
+      handler(1, ADMIN, p)
+      await settle()
+    }
+    handler(1, ADMIN, 'unlock 482913')
+    await settle()
+    expect(outbox.at(-1)!.text).toMatch(/blocked for 15 minutes/)
+    expect(computerCalls).toEqual(['unlock'])
+    expect(() => R.setUnlockPin('12')).toThrow(/4 to 8 digits/)
   })
 })

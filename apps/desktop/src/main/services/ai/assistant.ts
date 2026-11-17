@@ -1,4 +1,5 @@
 import { db } from '../../db'
+import { secrets } from '../../security/secrets'
 import { bus } from '../../core/events'
 import { logger } from '../../core/logger'
 import { getSettings } from '../../core/settings'
@@ -15,7 +16,7 @@ import { CATALOG, CATALOG_CHANNELS } from './assistantCatalog'
 import * as knowledge from '../knowledge'
 import { writeTemplate } from './writer'
 import { changeSettings, findSettings, settingsList } from './settingsCatalog'
-import { computerAction, canDo } from '../../core/computer'
+import { computerAction, canDo, isLocked } from '../../core/computer'
 import type { LeadFilter } from '@shared/types'
 
 /**
@@ -481,13 +482,15 @@ const TOOLS: Record<string, Tool> = {
   system_status: {
     args: '{}',
     desc: 'Is the software running, window shown/hidden, uptime, WhatsApp/email connections, background work (search, email finder, agent queue, campaigns).',
-    run: () => {
+    run: async () => {
+      const locked = await isLocked()
       const wa = db().all<{ label: string; status: string; phone: string | null }>('SELECT label, status, phone FROM whatsapp_accounts')
       const bg = backgroundStatus()
       const s = gmaps.activeSearch() as any
       return {
         software: 'running',
         ...(appControls?.status() ?? {}),
+        computer_screen: locked === null ? 'unknown' : locked ? 'locked' : 'unlocked',
         whatsapp_accounts: wa.map((w) => `${w.label}${w.phone ? ` (+${w.phone})` : ''}: ${w.status}`),
         email_accounts: db().all<{ from_email: string; status: string }>('SELECT from_email, status FROM smtp_accounts').map((e) => `${e.from_email}: ${e.status}`),
         maps_search: s ? `${s.keyword}${s.location ? ` in ${s.location}` : ''} — ${s.saved} saved` : 'none running',
@@ -513,11 +516,17 @@ const TOOLS: Record<string, Tool> = {
     }
   },
   computer: {
-    args: '{"action": "lock"|"sleep"|"shutdown"|"restart"}',
-    desc: 'Control the computer (Windows, Linux, Mac): lock the screen now (the software keeps running and WhatsApp control keeps working); sleep, shut down (power off) or restart ask for approval first.',
+    args: '{"action": "lock"|"unlock"|"sleep"|"shutdown"|"restart"}',
+    desc: 'Control the computer (Windows, Linux, Mac): lock the screen now (the software keeps running and WhatsApp control keeps working); unlock asks the owner for their unlock PIN (checked on the computer — never ask for or repeat the computer password); sleep, shut down (power off) or restart ask for approval first.',
     run: async (a, ctx) => {
       const act = norm(a.action).toLowerCase().replace('power off', 'shutdown').replace('poweroff', 'shutdown').replace('reboot', 'restart') as any
       if (act === 'lock') return { ...(await computerAction('lock')), note: 'Screen locked. The software keeps running; WhatsApp commands still work.' }
+      if (act === 'unlock') {
+        if (process.platform === 'win32') return { ok: false, problem: 'Windows does not allow programs to unlock the lock screen — it has to be unlocked at the computer (or with Windows Remote Desktop).' }
+        if (!secrets.has('remote.unlockPin')) return { ok: false, problem: 'No unlock PIN is set yet. On the computer: Settings → WhatsApp Remote Admin → Remote unlock PIN (4–8 digits, not the computer password).' }
+        bus.publish('remote:expectPin', {})
+        return { ok: true, next: 'Ask the owner to send their unlock PIN as the next message. It is checked on the computer and never shown to you. Do not ask for the computer password.' }
+      }
       if (act === 'sleep' || act === 'shutdown' || act === 'restart') {
         const can = await canDo(act)
         if (!can.ok) return { ok: false, problem: can.why }

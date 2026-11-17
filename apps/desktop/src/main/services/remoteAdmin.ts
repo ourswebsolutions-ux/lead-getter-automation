@@ -1,4 +1,6 @@
-import { randomInt } from 'node:crypto'
+import { randomInt, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
+import { secrets } from '../security/secrets'
+import { computerAction, canUnlockRemotely } from '../core/computer'
 import { db } from '../db'
 import { bus } from '../core/events'
 import { logger } from '../core/logger'
@@ -83,6 +85,61 @@ export async function sendVerificationCode(): Promise<{ sent: true; to: string }
   return { sent: true, to: n }
 }
 
+// ---------------------------------------------------------------- remote unlock PIN
+
+const PIN_KEY = 'remote.unlockPin'
+let pinFails: number[] = []
+/** Digits-only messages count as a PIN only right after the assistant asked for one. */
+let pinExpectedUntil = 0
+
+/** A separate unlock PIN (never the computer password), stored as a salted scrypt hash in the encrypted vault. */
+export function setUnlockPin(pin: string): void {
+  const p = String(pin ?? '').trim()
+  if (!/^\d{4,8}$/.test(p)) throw new Error('The unlock PIN must be 4 to 8 digits.')
+  const salt = randomBytes(16)
+  secrets.set(PIN_KEY, `${salt.toString('hex')}:${scryptSync(p, salt, 32).toString('hex')}`)
+  pinFails = []
+  logActivity('user', 'remote_unlock_pin_set', 'whatsapp')
+}
+export function clearUnlockPin(): void {
+  secrets.delete(PIN_KEY)
+}
+export const hasUnlockPin = () => secrets.has(PIN_KEY)
+
+function pinMatches(pin: string): boolean {
+  const stored = secrets.get(PIN_KEY)
+  if (!stored) return false
+  const [salt, hash] = stored.split(':')
+  const got = scryptSync(pin, Buffer.from(salt, 'hex'), 32)
+  return timingSafeEqual(got, Buffer.from(hash, 'hex'))
+}
+
+/** "1234" or "unlock 1234": checked here, never shown to the AI. Returns the reply, or null if it isn't a PIN message. */
+async function tryUnlock(msg: string): Promise<string | null> {
+  const m = /^\s*(unlock|pin|unlock pin|unlock kr do|unlock karo)?\s*[:\-]?\s*(\d{4,8})\s*$/i.exec(msg)
+  if (!m || (!m[1] && Date.now() > pinExpectedUntil)) return null
+  pinExpectedUntil = 0
+  if (!hasUnlockPin()) return 'No unlock PIN is set. Set one on the computer: Settings → WhatsApp Remote Admin → Remote unlock PIN.'
+  m[1] = m[2]
+  const now = Date.now()
+  pinFails = pinFails.filter((t) => t > now - 15 * 60_000)
+  if (pinFails.length >= 3) return '🔒 Too many wrong PINs. Remote unlock is blocked for 15 minutes.'
+  if (!pinMatches(m[1])) {
+    pinFails.push(now)
+    logActivity('user', 'remote_unlock_failed', 'whatsapp')
+    return `❌ Wrong PIN. ${3 - pinFails.length} tr${3 - pinFails.length === 1 ? 'y' : 'ies'} left.`
+  }
+  pinFails = []
+  if (!canUnlockRemotely()) return process.platform === 'win32' ? 'Windows does not allow programs to unlock the lock screen — unlock it at the computer.' : 'Remote unlock is not available on this system.'
+  try {
+    await computerAction('unlock')
+    logActivity('user', 'remote_unlock', 'whatsapp')
+    return '🔓 Computer unlocked. Send "lock" to lock it again.'
+  } catch (e: any) {
+    return `❌ Could not unlock: ${e.message}`
+  }
+}
+
 function record(text: string, status: 'done' | 'failed' | 'ignored', reply: string) {
   logActivity('user', 'remote_command', 'whatsapp', undefined, { text: text.slice(0, 500), status, reply: reply.slice(0, 500) })
   bus.publish('remote:command', {})
@@ -121,6 +178,12 @@ async function handle(accountId: number, text: string, meta: { offline?: boolean
     const when = meta.at ? new Date(meta.at).toLocaleString() : 'earlier'
     record(msg, 'ignored', 'received while the software was off')
     await sendToAdmin(`⚠️ The software was off when you sent this (${when}):\n“${msg.slice(0, 200)}”\nNothing was done. It is running now — send the command again if you still want it.`, accountId)
+    return
+  }
+  const unlockReply = await tryUnlock(msg)
+  if (unlockReply) {
+    record('•••• (unlock PIN)', unlockReply.startsWith('🔓') ? 'done' : 'failed', unlockReply)
+    await sendToAdmin(unlockReply, accountId)
     return
   }
   try {
@@ -184,6 +247,7 @@ function onNotify(p: { kind?: string; title?: string; body?: string }): void {
 export function startRemoteAdmin(): void {
   wa.setAdminHandler(onWhatsAppMessage)
   bus.on('event', (evt: { type: string; payload: any }) => {
+    if (evt.type === 'remote:expectPin') pinExpectedUntil = Date.now() + 3 * 60_000
     if (evt.type === 'notify') onNotify(evt.payload ?? {})
     // Tell the admin once per start that the software is up (so they know commands will work).
     if (evt.type === 'whatsapp:status' && evt.payload?.status === 'connected' && !announced) {
@@ -210,6 +274,8 @@ export function remoteStatus() {
     ...s,
     account: acc ? db().get('SELECT id, label, phone FROM whatsapp_accounts WHERE id = ?', acc) : null,
     codePending: !!code && Date.now() < code.expires,
+    hasUnlockPin: hasUnlockPin(),
+    canUnlock: canUnlockRemotely(),
     history: db()
       .all<{ created_at: string; detail: string }>("SELECT created_at, detail FROM activity_logs WHERE action = 'remote_command' ORDER BY id DESC LIMIT 20")
       .map((r) => ({ at: r.created_at, ...JSON.parse(r.detail ?? '{}') }))

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Smartphone, ShieldCheck, Send, BellRing, Power, MessageCircle, CircleAlert } from 'lucide-react'
+import { Smartphone, ShieldCheck, Send, BellRing, Power, MessageCircle, CircleAlert, LockKeyhole } from 'lucide-react'
 import { rpc, useAction, useQuery } from '../lib/rpc'
 import { fmtRelative } from '../lib/format'
 import { Button, Card, Field, Input, Select, Switch, SwitchRow, Callout } from '../components/ui'
@@ -20,6 +20,7 @@ export function RemoteAdminSettings() {
   const { data: s, reload: reloadSettings } = useQuery<any>('settings:get', [], { events: ['settings:*'] })
   const { data: accounts } = useQuery<any[]>('whatsapp:list', [], { events: ['whatsapp:*'] })
   const [number, setNumber] = useState('')
+  const [pin, setPin] = useState('')
   const { busy, run } = useAction()
   useEffect(() => {
     if (st?.number !== undefined) setNumber(st.number)
@@ -82,6 +83,19 @@ export function RemoteAdminSettings() {
         </Card>
 
         <div className="col gap-16">
+          <Card title={<span className="row"><LockKeyhole size={14} /> Remote unlock PIN</span>} sub={st.canUnlock ? 'Send "unlock" on WhatsApp, then this PIN, to unlock the computer. Use a PIN — never your computer password.' : 'Windows does not let programs unlock the lock screen, so remote unlock is not available here. Remote lock still works.'}>
+            {st.canUnlock && (
+              <div className="row wrap" style={{ gap: 8 }}>
+                <span className={`pill ${st.hasUnlockPin ? 'green' : ''}`}><span className="d" />{st.hasUnlockPin ? 'PIN set' : 'No PIN'}</span>
+                <span className="grow" />
+                <Input type="password" inputMode="numeric" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 8))} placeholder="4–8 digits" style={{ width: 130, height: 30 }} />
+                <Button size="sm" variant="primary" disabled={pin.length < 4} onClick={() => run('pin', () => rpc('remote:setPin', pin), { success: 'Unlock PIN saved' }).then(() => (setPin(''), reload()))}>
+                  {st.hasUnlockPin ? 'Change' : 'Save'}
+                </Button>
+                {st.hasUnlockPin && <Button size="sm" variant="ghost" onClick={() => run('pinx', () => rpc('remote:clearPin'), { success: 'PIN removed' }).then(reload)}>Remove</Button>}
+              </div>
+            )}
+          </Card>
           <Card title={<span className="row"><BellRing size={14} /> Send me on WhatsApp</span>}>
             {NOTIFY.map(([k, label]) => (
               <SwitchRow key={k} title={label} on={!!ra[k]} onChange={(v) => save({ [k]: v })} />
