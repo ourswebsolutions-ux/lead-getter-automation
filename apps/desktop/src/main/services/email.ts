@@ -1,6 +1,7 @@
 import nodemailer, { type Transporter } from 'nodemailer'
 import { ImapFlow } from 'imapflow'
 import { simpleParser } from 'mailparser'
+import { promises as dnsp } from 'node:dns'
 import { db } from '../db'
 import { bus } from '../core/events'
 import { logger } from '../core/logger'
@@ -124,7 +125,7 @@ export async function testSmtp(id: number): Promise<{ ok: boolean; message: stri
     let imapMsg = ''
     const acct = db().get<any>('SELECT imap_host FROM smtp_accounts WHERE id = ?', id)
     if (acct?.imap_host) {
-      const c = imapClient(id)
+      const c = await imapClient(id)
       await c.connect()
       await c.logout()
       imapMsg = ' IMAP login succeeded — replies and bounces will be tracked.'
@@ -187,10 +188,20 @@ export async function sendTestEmail(accountId: number, to: string, subject: stri
 
 // ---------------------------------------------------------------- IMAP reply & bounce tracking
 
-function imapClient(id: number): ImapFlow {
+/** IPv4 address of a mail host: many networks have broken IPv6 routes and IMAP then just times out. */
+async function ipv4(host: string): Promise<string> {
+  try {
+    return (await dnsp.lookup(host, { family: 4 })).address
+  } catch {
+    return host
+  }
+}
+
+async function imapClient(id: number): Promise<ImapFlow> {
   const acct = db().get<any>('SELECT * FROM smtp_accounts WHERE id = ?', id)
   return new ImapFlow({
-    host: acct.imap_host,
+    host: await ipv4(acct.imap_host),
+    servername: acct.imap_host,
     port: acct.imap_port || (acct.imap_secure ? 993 : 143),
     secure: !!acct.imap_secure,
     auth: { user: acct.username, pass: secrets.get(pwKey(id)) ?? '' },
@@ -297,7 +308,7 @@ export async function pollInbox(id: number): Promise<{ processed: number }> {
   const acct = db().get<any>('SELECT * FROM smtp_accounts WHERE id = ? AND enabled = 1 AND imap_host IS NOT NULL', id)
   if (!acct) return { processed: 0 }
   polling.add(id)
-  const client = imapClient(id)
+  const client = await imapClient(id)
   let processed = 0
   try {
     await client.connect()
@@ -352,8 +363,57 @@ export async function pollInbox(id: number): Promise<{ processed: number }> {
 }
 
 let pollTimer: NodeJS.Timeout | null = null
+/**
+ * Live inbox watching: one IMAP IDLE connection per account, so a new email is read the moment it
+ * arrives (Gmail pushes it). The interval poll below stays as a safety net and restarts watchers.
+ */
+const watchers = new Map<number, { client: ImapFlow | null; stopping: boolean; retry: number; timer?: NodeJS.Timeout; debounce?: NodeJS.Timeout }>()
+
+async function watchInbox(id: number): Promise<void> {
+  const w = watchers.get(id)
+  if (!w || w.stopping) return
+  try {
+    const client = await imapClient(id)
+    w.client = client
+    client.on('exists', () => {
+      clearTimeout(w.debounce)
+      w.debounce = setTimeout(() => void pollInbox(id), 1500)
+    })
+    client.on('close', () => {
+      if (w.stopping) return
+      w.client = null
+      w.timer = setTimeout(() => void watchInbox(id), Math.min(300_000, 5000 * 2 ** Math.min(w.retry++, 6)))
+    })
+    client.on('error', (e: any) => log.warn(`Inbox watcher ${id}: ${e?.code ?? e?.message ?? e}`))
+    await client.connect()
+    await client.mailboxOpen('INBOX') // imapflow then IDLEs automatically and emits "exists" for new mail
+    w.retry = 0
+    log.info(`Watching inbox of account ${id}`)
+  } catch (e: any) {
+    log.warn(`Inbox watcher ${id} could not connect: ${[e.message, e.code, e.responseText].filter(Boolean).join(' · ')}`)
+    if (!w.stopping) w.timer = setTimeout(() => void watchInbox(id), Math.min(300_000, 5000 * 2 ** Math.min(w.retry++, 6)))
+  }
+}
+
+function syncWatchers(): void {
+  const ids = new Set(db().all<{ id: number }>('SELECT id FROM smtp_accounts WHERE enabled = 1 AND imap_host IS NOT NULL').map((a) => a.id))
+  for (const [id, w] of watchers)
+    if (!ids.has(id)) {
+      w.stopping = true
+      clearTimeout(w.timer)
+      void w.client?.logout().catch(() => {})
+      watchers.delete(id)
+    }
+  for (const id of ids)
+    if (!watchers.has(id)) {
+      watchers.set(id, { client: null, stopping: false, retry: 0 })
+      void watchInbox(id)
+    }
+}
+
 export function startInboxPolling(intervalMs = 90_000): void {
   const run = () => {
+    syncWatchers()
     for (const a of db().all<{ id: number }>('SELECT id FROM smtp_accounts WHERE enabled = 1 AND imap_host IS NOT NULL')) void pollInbox(a.id)
   }
   pollTimer = setInterval(run, intervalMs)
@@ -361,6 +421,12 @@ export function startInboxPolling(intervalMs = 90_000): void {
 }
 export function stopInboxPolling(): void {
   if (pollTimer) clearInterval(pollTimer)
+  for (const w of watchers.values()) {
+    w.stopping = true
+    clearTimeout(w.timer)
+    void w.client?.logout().catch(() => {})
+  }
+  watchers.clear()
   for (const t of transporters.values()) t.close()
   transporters.clear()
 }

@@ -14,6 +14,7 @@ import { addEmailAccount } from '../emailAutoConfig'
 import { CATALOG, CATALOG_CHANNELS } from './assistantCatalog'
 import * as knowledge from '../knowledge'
 import { writeTemplate } from './writer'
+import { changeSettings, findSettings, settingsList } from './settingsCatalog'
 import type { LeadFilter } from '@shared/types'
 
 /**
@@ -461,13 +462,28 @@ const TOOLS: Record<string, Tool> = {
       return { removed: item.title }
     }
   },
+  change_setting: {
+    args: '{"changes": {"section.key": value, ...}}',
+    desc: `Change any app setting directly (other settings are kept). Settings: ${settingsList()}`,
+    run: (a) => {
+      const changes = a.changes && typeof a.changes === 'object' ? a.changes : a.setting ? { [a.setting]: a.value } : a.key ? { [a.key]: a.value } : {}
+      return changeSettings(changes)
+    }
+  },
   capabilities: {
     args: '{"area": string}',
-    desc: `Everything you can do in one area of the app (exact actions + arguments). Areas: ${Object.keys(CATALOG).join(', ')}.`,
+    desc: `What you can do in an area (exact actions + arguments), or search with any words (e.g. "reply time"). Areas: ${Object.keys(CATALOG).join(', ')}.`,
     run: (a) => {
-      const area = CATALOG[norm(a.area)]
-      if (!area) throw new Error(`Unknown area. Areas: ${Object.keys(CATALOG).join(', ')}`)
-      return { area: norm(a.area), about: area.about, actions: Object.entries(area.calls).map(([ch, e]) => ({ action: ch, args: e.args, does: e.desc, needs_approval: !!e.confirm })) }
+      const q = norm(a.area ?? a.query)
+      const area = CATALOG[q.toLowerCase()]
+      if (area) return { area: q, about: area.about, actions: Object.entries(area.calls).map(([ch, e]) => ({ action: ch, args: e.args, does: e.desc, needs_approval: !!e.confirm })) }
+      // Not an area name: search every action and setting.
+      const words = q.toLowerCase().split(/\W+/).filter((w) => w.length > 2)
+      const actions = Object.entries(CATALOG_CHANNELS)
+        .filter(([ch, e]) => words.some((w) => ch.toLowerCase().includes(w) || e.desc.toLowerCase().includes(w)))
+        .slice(0, 8)
+        .map(([ch, e]) => ({ action: ch, args: e.args, does: e.desc, needs_approval: !!e.confirm }))
+      return { searched: q, settings: findSettings(q), actions, hint: 'Change settings with change_setting; run actions with app_call.' }
     }
   },
   app_call: {
@@ -643,6 +659,7 @@ RULES
 - "Search X in Y and save in Z" → maps_search(keyword X, location Y, category Z). The search runs in the background: tell the user it started and that they can watch progress; do not wait for it.
 - "Find emails for category" → find_emails. Never invent or guess email addresses.
 - Campaigns: always prepare_campaign first and show its summary; it is sent only after the user approves (they may click Approve or say yes). Call confirm_action only when the user's newest message is a clear yes to the summary waiting for approval.
+- Settings (reply time/delay, auto reply, working hours, company info, signature, tone, theme…): use change_setting right away with the key from its list — never ask the user where a setting is or what it is called.
 - You control the WHOLE app. For anything without a dedicated tool (delete/edit leads, settings, company info, signature, templates, WhatsApp, accounts, conversations, approvals, verification, do-not-contact list…): call capabilities(area) to see the exact actions, then app_call. Never tell the user to do it by hand or that it is impossible before checking capabilities, and never guess where a button is.
 - Deletes, removals, sending messages and other risky actions always show an approval summary first; then wait for the user's yes.
 - Email accounts: the user may type the email + app password in chat — the app adds the account locally and hides the password before you see it (you will see the result as a tool note). Or offer add_email_account (form button). Never ask the user to repeat a password and never write one.
@@ -812,11 +829,12 @@ function scrubStoredSecrets(): void {
   }
 }
 
-const ROMAN_URDU = /\b(kro|karo|kr|kar|krdo|kardo|hai|hain|ha|ka|ki|ke|mein|mai|ma|nahi|nhi|aur|yeh|ye|wo|kya|kaise|kitne|kitni|sab|sari|sare|dikhao|batao|bhejo|chahiye|chiya|haan|han|jo|unko|isko|mera|meri|apna)\b/gi
+const ROMAN_URDU = /\b(kro|karo|kr do|kar do|krdo|kardo|kr|kar|krna|karna|hai|hain|ha|ka|ki|ke|ko|se|tak|mein|mai|ma|nahi|nahin|nhi|aur|yeh|ye|wo|woh|kya|kia|kiya|kaise|kitne|kitni|kitna|kab|kahan|kyun|sab|sari|sare|kuch|zara|abhi|ab|phir|bhi|lekin|magar|dikhao|batao|bata|dekho|bhejo|chahiye|chiya|chahta|chahti|haan|han|jo|unko|isko|usko|mera|meri|mujhe|hum|aap|ap|apna|baje|shaam|subah|raat|theek|acha|wala|wali|wale|raha|rahi|rhe|gaya|gayi|hoga|hogi|dena|lena|karein|kijiye)\b/gi
 /** Tells the model which language to answer in for this turn (Roman Urdu is easy to miss). */
 function langHint(text: string): string {
   const hits = text.match(ROMAN_URDU)?.length ?? 0
-  return hits >= 2 ? '\n\nTHIS TURN: the user wrote Roman Urdu — your "say" MUST be in Roman Urdu (Urdu in Latin letters), not English.' : ''
+  const strong = /\b(kr do|kar do|krdo|kardo|kro|karo|hai|hain|nahi|nhi|mujhe|kya|kia|batao|dikhao|chahiye|theek|baje|kijiye|karein)\b/i.test(text)
+  return hits >= 2 || strong ? '\n\nTHIS TURN: the user wrote Roman Urdu — your "say" MUST be in Roman Urdu (Urdu in Latin letters), not English.' : ''
 }
 
 /** Parses "try again in 1m2.5s" / "4.2s" / "480ms" from a provider error. */
@@ -889,6 +907,9 @@ export async function ask(text: string): Promise<void> {
   const done: { tool: string; ok: boolean; note?: string }[] = []
   try {
     const convo = history()
+    // Models follow a language note on the newest message far better than one in the system prompt.
+    const lastUser = convo[convo.length - 1]
+    if (langHint(msg) && lastUser?.role === 'user') lastUser.content += '\n\n(Reply to me in Roman Urdu.)'
     let usedTools = false
     let guardRetries = 0
     for (let step = 0; step < 8; step++) {
@@ -943,7 +964,7 @@ export async function ask(text: string): Promise<void> {
         addMessage('tool', `${c.tool}: ${entry.ok ? 'ok' : entry.error ?? 'not done'}`, entry)
       }
       convo.push({ role: 'assistant', content: JSON.stringify({ say: r.say ?? '', calls }) })
-      convo.push({ role: 'user', content: `TOOL RESULTS (real, from the app):\n${JSON.stringify(results).slice(0, 6000)}\nNow continue: more calls, or the final answer with "calls": [].` })
+      convo.push({ role: 'user', content: `TOOL RESULTS (real, from the app):\n${JSON.stringify(results).slice(0, 6000)}\nNow continue: more calls, or the final answer with "calls": [].${langHint(msg) ? ' Write the answer in Roman Urdu.' : ''}` })
     }
     addMessage('assistant', 'I stopped here to avoid running too many steps. Tell me what to do next.', buttons.length ? { buttons } : undefined)
   } catch (e: any) {

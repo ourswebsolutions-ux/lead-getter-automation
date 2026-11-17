@@ -363,7 +363,7 @@ Read the whole conversation and the customer's latest message, then return JSON:
  "follow_up_in_days": number of days to follow up if they asked to be contacted later or went quiet after showing interest, else null,${conv.lead_id ? '' : `
  "customer_name": their name if they said it, else null,
  "customer_business": their company/shop name if they said it, else null,`}
- "reply": your next message to the customer in their language (for needs_human: a natural holding reply, e.g. that you'll check and get back; for opt_out: "")}`,
+ "reply": your next message to the customer in their language (for needs_human: a natural holding reply, e.g. that you'll check and get back; for opt_out: ""; "" when the message needs no answer — e.g. just "thanks/ok", an auto-reply, or nothing to do with our business)}`,
       messages: transcript(convId)
     })
     const decision = { intent: a.intent, interest: a.interest, language: a.language, needs_human: !!a.needs_human, reason: a.human_reason || undefined, follow_up_in_days: a.follow_up_in_days ?? undefined }

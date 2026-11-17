@@ -34,6 +34,10 @@ export interface GenerateRequest {
 export function supportsStrictSchema(p: ProviderId, model: string): boolean {
   if (p === 'groq') return /^(openai\/gpt-oss-(20b|120b)|qwen\/qwen3\.8)/.test(model)
   if (p === 'openai') return /^(gpt-4o|gpt-4\.1|gpt-5|o[134])/.test(model)
+  // Claude structured outputs (output_config.format): Fable/Mythos 5.x, Opus 5.5/5/4.8, Sonnet 5.5/5, Haiku 5.5/4.5, Opus 4.5/4.1.
+  if (p === 'anthropic') return /^claude-(fable-5|mythos-5|opus-5|opus-4-[158]|sonnet-5|haiku-5-5|haiku-4-5)/.test(model)
+  // Gemini 2.x+ takes a JSON Schema in responseJsonSchema.
+  if (p === 'gemini') return /^gemini-([2-9]|\d{2})/.test(model)
   return false
 }
 
@@ -71,17 +75,20 @@ async function callProvider(p: ProviderId, model: string, req: GenerateRequest):
   const max = req.maxTokens ?? maxTokens
   if (p === 'anthropic') {
     const client = new Anthropic({ apiKey: apiKey(p), maxRetries: 2, timeout: 120_000 })
-    const system = req.json ? `${req.system}\n\nRespond with a single valid JSON object only — no prose, no code fences.` : req.system
+    const strict = !!(req.json && req.schema && supportsStrictSchema(p, model))
+    const system = req.json && !strict ? `${req.system}\n\nRespond with a single valid JSON object only — no prose, no code fences.` : req.system
+    const output_config = {
+      ...(/^claude-(opus|sonnet|haiku|fable|mythos)-5/.test(model) ? { effort: 'low' as const } : {}),
+      ...(strict ? { format: { type: 'json_schema' as const, schema: req.schema!.schema } } : {})
+    }
     // Claude 4.6+/5.x: sampling parameters are not accepted, so temperature is intentionally omitted.
-    const res = await client.messages.create({
-      model,
-      max_tokens: Math.max(max, 2048),
-      system,
-      messages: req.messages,
-      ...(/^claude-(opus|sonnet|haiku|fable)-5/.test(model) ? { output_config: { effort: 'low' as const } } : {})
-    })
+    const params = { model, max_tokens: Math.max(max, 2048), system, messages: req.messages, ...(Object.keys(output_config).length ? { output_config } : {}) }
+    // Models with safety classifiers: if one declines, the API re-runs the request on a suitable fallback model in the same call.
+    const res: any = /^claude-(fable-5-[12]|mythos-5-[12]|opus-5-5|opus-5|sonnet-5-5)$/.test(model)
+      ? await client.beta.messages.create({ ...params, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' } as any)
+      : await client.messages.create(params)
     if (res.stop_reason === 'refusal') throw new Error('Claude declined to answer this request.')
-    const text = res.content.map((b) => (b.type === 'text' ? b.text : '')).join('')
+    const text = res.content.map((b: any) => (b.type === 'text' ? b.text : '')).join('')
     return { text, provider: p, model, inputTokens: res.usage.input_tokens, outputTokens: res.usage.output_tokens }
   }
   if (p === 'openai' || p === 'groq') {
@@ -122,7 +129,8 @@ async function callProvider(p: ProviderId, model: string, req: GenerateRequest):
         systemInstruction: req.system,
         temperature,
         maxOutputTokens: Math.max(max, 2048),
-        ...(req.json ? { responseMimeType: 'application/json' } : {})
+        ...(req.json ? { responseMimeType: 'application/json' } : {}),
+        ...(req.json && req.schema && supportsStrictSchema(p, model) ? { responseJsonSchema: req.schema.schema } : {})
       }
     })
     return {

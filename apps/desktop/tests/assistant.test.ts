@@ -283,3 +283,37 @@ describe('when the AI fails after acting', () => {
     expect(db().get<any>("SELECT COUNT(*) n FROM lead_categories WHERE name = 'Bags'").n).toBe(1)
   })
 })
+
+describe('change_setting', () => {
+  it('changes any setting by name and keeps the rest', async () => {
+    freshDb()
+    const { getSettings } = await import('../src/main/core/settings')
+    const before = getSettings().agent
+    const r: any = await A.runToolForTests('change_setting', { changes: { 'agent.delayMinutes': '1', 'agent.workStart': '9am', 'agent.autoSendReplies': 'on' } })
+    expect(r.changed.map((c: any) => c.to)).toEqual([1, '09:00', true])
+    const after = getSettings().agent
+    expect(after).toMatchObject({ delayMinutes: 1, workStart: '09:00', autoSendReplies: true, tone: before.tone, emailEnabled: before.emailEnabled })
+    await expect(async () => A.runToolForTests('change_setting', { changes: { 'agent.replyTime': 1 } })).rejects.toThrow(/Did you mean: .*agent\.delayMinutes/)
+    const found: any = await A.runToolForTests('capabilities', { area: 'reply time' })
+    expect(found.settings[0].setting).toBe('agent.delayMinutes')
+  })
+})
+
+describe('Roman Urdu detection', () => {
+  it('spots short Roman Urdu commands but not English', async () => {
+    const m = (t: string) => (t.match(/\b(kro|karo|kr do|kar do|krdo|kardo|kr|kar|se|tak|baje|shaam)\b/gi) ?? []).length
+    expect(m('auto reply on kr do')).toBeGreaterThanOrEqual(1)
+    // the assistant's own detector, through its effect on the prompt
+    const { generateJson } = await import('../src/main/services/ai/providers')
+    freshDb()
+    ;(generateJson as any).mockClear()
+    script.length = 0
+    script.push({ say: 'theek hai', calls: [] })
+    await A.ask('auto reply on kr do')
+    expect(JSON.stringify((generateJson as any).mock.calls[0][0].messages)).toContain('Roman Urdu')
+    ;(generateJson as any).mockClear()
+    script.push({ say: 'ok', calls: [] })
+    await A.ask('please do turn on auto reply for me')
+    expect(JSON.stringify((generateJson as any).mock.calls[0][0].messages)).not.toContain('Roman Urdu')
+  })
+})
