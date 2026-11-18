@@ -47,6 +47,8 @@ export interface AppSettings {
     /** Mark WhatsApp messages as read when the agent answers them. */
     markWhatsAppRead: boolean
     outreachStrategy: string
+    /** The owner's own words about the business and how to deal with customers — the agent's main brief. */
+    businessPrompt: string
     templates: string
   }
   ai: {
@@ -114,7 +116,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
     markWhatsAppRead: true,
     outreachStrategy:
       'Lead with one specific, relevant observation about their business. Offer value before asking for anything. Keep the first message under 90 words and end with a single low-pressure question.',
-    templates: ''
+    templates: '',
+    businessPrompt: ''
   },
   ai: { defaultProvider: null, fallbackEnabled: false, fallbackProvider: null, temperature: 0.6, maxTokens: 1200 },
   pricing: { currency: 'USD', services: [], complexity: { low: 1, medium: 1.5, high: 2.25 }, notes: '' },

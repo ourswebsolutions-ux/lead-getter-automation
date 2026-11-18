@@ -233,3 +233,20 @@ describe('easy campaign', () => {
     expect(db().get<any>("SELECT name FROM email_templates").name).toBe('Bags — AI')
   })
 })
+
+describe('business prompt', () => {
+  beforeEach(() => setup())
+  it('goes first into every reply and its prices count as saved prices', async () => {
+    agentCfg({ businessPrompt: 'We are Automas. Starter website Rs 35,000. Always be friendly and reply in Roman Urdu.' })
+    expect(K.knowledgeBlock().startsWith("THE OWNER'S BRIEF")).toBe(true)
+    expect(K.hasPricingKnowledge()).toBe(true)
+    expect(K.unknownAmounts('Starter website Rs 35,000 ka hai')).toEqual([])
+    const { generateJson } = await import('../src/main/services/ai/providers')
+    ;(generateJson as any).mockClear()
+    reply = { ...base, intent: 'pricing', reply: 'Starter website Rs 35,000 ka hai. Aap ka kya business hai?' }
+    incoming('website kitne ki hai?')
+    await Q.tick(later(10))
+    expect(sent.at(-1)!.body).toMatch(/35,000/)
+    expect((generateJson as any).mock.calls[0][0].system).toContain('Always be friendly and reply in Roman Urdu')
+  })
+})

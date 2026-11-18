@@ -26,6 +26,7 @@ export const SETTINGS_INFO: Record<string, { about: string; kind: Kind; min?: nu
   'agent.tone': { about: 'agent tone', kind: { oneOf: ['professional', 'friendly', 'consultative', 'formal'] } },
   'agent.language': { about: 'default reply language when unsure', kind: 'text' },
   'agent.outreachStrategy': { about: 'how first-touch messages should be written', kind: 'text' },
+  'agent.businessPrompt': { about: "the owner's business brief/prompt for the AI agent (replace the whole text; to add, include the old text)", kind: 'text' },
   'company.name': { about: 'company name', kind: 'text' },
   'company.senderName': { about: 'name the agent signs as', kind: 'text' },
   'company.website': { about: 'company website', kind: 'text' },

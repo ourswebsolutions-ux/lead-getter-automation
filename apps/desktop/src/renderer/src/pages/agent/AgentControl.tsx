@@ -237,6 +237,52 @@ const TOPICS: { value: string; label: string; hint: string }[] = [
   { value: 'other', label: 'Other', hint: 'Anything else the agent should know' }
 ]
 
+const PROMPT_EXAMPLE = `We are Automas Software, a web & app development company in Lahore (Johar Town).
+Services: business websites, online stores, mobile apps, WhatsApp automation.
+Packages: Starter website Rs 35,000 (5 pages, 2 weeks). Online store Rs 85,000 (up to 100 products, 4 weeks).
+Payment: 50% advance, 50% on delivery. Hosting & domain billed separately.
+Office: Mon–Sat, 10am–7pm. Phone/WhatsApp: 0300-0000000.
+
+How to talk: friendly and simple, like a helpful team member. Reply in Roman Urdu if the customer writes Roman Urdu.
+Always ask what their business is and what they need before suggesting a package.
+Never give discounts yourself — say the owner will confirm.`
+
+/** One free-text brief in the owner's own words — the agent's main source for every reply. */
+function BusinessPrompt() {
+  const { data: s, reload } = useQuery<any>('settings:get', [], { events: ['settings:*'] })
+  const [text, setText] = useState<string | null>(null)
+  const { busy, run } = useAction()
+  const saved = s?.agent?.businessPrompt ?? ''
+  useEffect(() => {
+    if (s && text === null) setText(saved)
+  }, [s])
+  if (!s || text === null) return null
+  const dirty = text !== saved
+  const tokens = Math.round(text.length / 4)
+  return (
+    <Card
+      title="Business prompt"
+      sub="Write about your business and how the AI should deal with customers — in your own words. Used in every email and WhatsApp reply."
+      actions={
+        <div className="row" style={{ gap: 8 }}>
+          {!text && <Button size="sm" variant="ghost" onClick={() => setText(PROMPT_EXAMPLE)}>Use example</Button>}
+          <Button size="sm" variant="primary" disabled={!dirty} loading={busy === 'bp'} onClick={() => run('bp', () => rpc('settings:update', { agent: { ...s.agent, businessPrompt: text.trim() } }), { success: 'Business prompt saved' }).then(reload)}>
+            {dirty ? 'Save' : 'Saved'}
+          </Button>
+        </div>
+      }
+    >
+      <Textarea rows={14} value={text} onChange={(e) => setText(e.target.value)} placeholder={PROMPT_EXAMPLE} style={{ fontSize: 13.5, lineHeight: 1.65 }} />
+      <div className="row" style={{ marginTop: 8, fontSize: 11.5, gap: 10 }}>
+        <span className="faint">{text.length.toLocaleString()} characters · ~{tokens.toLocaleString()} tokens per reply</span>
+        <span className="grow" />
+        {tokens > 2500 && <span style={{ color: 'var(--amber)' }}>Long prompts use more AI tokens on every reply (free plans have daily limits).</span>}
+        {dirty && <span style={{ color: 'var(--accent)' }}>Not saved yet</span>}
+      </div>
+    </Card>
+  )
+}
+
 /** Knowledge tab: what the agent knows about the business. */
 export function KnowledgeTab() {
   const { data: items, reload } = useQuery<any[]>('knowledge:list', [], { events: ['knowledge:*'] })
@@ -253,6 +299,8 @@ export function KnowledgeTab() {
         </div>
         <Button variant="primary" icon={<Plus size={14} />} onClick={() => setEdit({ topic: 'services', title: '', content: '', private: false })}>Add info</Button>
       </div>
+      <BusinessPrompt />
+      <div className="faint" style={{ fontSize: 12, marginTop: -4 }}>Optional: organise extra details by topic below (the agent uses both).</div>
       <div className="grid-2" style={{ alignItems: 'start', gap: 16 }}>
         {groups.map((g) => (
           <Card key={g.value} title={g.label} sub={g.hint} actions={<Button size="sm" variant="ghost" iconOnly icon={<Plus size={14} />} onClick={() => setEdit({ topic: g.value, title: '', content: '', private: false })} />}>

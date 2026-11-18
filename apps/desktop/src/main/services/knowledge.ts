@@ -55,13 +55,20 @@ export function deleteKnowledge(id: number): void {
 }
 
 export function hasPricingKnowledge(): boolean {
+  if (AMOUNT_RE.test(getSettings().agent.businessPrompt ?? '')) {
+    AMOUNT_RE.lastIndex = 0
+    return true
+  }
+  AMOUNT_RE.lastIndex = 0
   return !!db().get("SELECT 1 FROM org_knowledge WHERE topic = 'pricing' AND private = 0")
 }
 
 /** Everything the customer-facing agent may use: company settings plus public knowledge items. */
 export function knowledgeBlock(): string {
   const c = getSettings().company
+  const brief = getSettings().agent.businessPrompt?.trim()
   const lines = [
+    brief && `THE OWNER'S BRIEF (their own words — business facts and how to deal with customers; follow it):\n${brief}`,
     c.name && `Company: ${c.name}`,
     c.website && `Website: ${c.website}`,
     c.description && `About: ${c.description}`,
@@ -74,7 +81,7 @@ export function knowledgeBlock(): string {
 
 /** All prices/amounts that appear in public knowledge (used to check the agent never quotes others). */
 export function knownAmounts(): Set<string> {
-  const text = [getSettings().company.services, ...listKnowledge().filter((k) => !k.private).map((k) => k.content)].join('\n')
+  const text = [getSettings().company.services, getSettings().agent.businessPrompt ?? '', ...listKnowledge().filter((k) => !k.private).map((k) => k.content)].join('\n')
   return new Set((text.match(AMOUNT_RE) ?? []).map(normAmount))
 }
 

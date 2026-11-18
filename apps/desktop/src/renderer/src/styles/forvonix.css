@@ -393,6 +393,7 @@ h4,
 
 /* ------------------------------------------------------------------ inputs */
 .input,
+.textarea,
 .select-trigger,
 textarea.input,
 select.input {
@@ -402,12 +403,14 @@ select.input {
   color: #f3f2f3;
 }
 .input::placeholder,
+.textarea::placeholder,
 textarea::placeholder,
 input::placeholder {
   color: rgba(255, 255, 255, 0.12);
 }
 .input:focus,
 .input:focus-within,
+.textarea:focus,
 textarea.input:focus {
   border-color: rgba(77, 166, 255, 0.35);
   background: rgba(77, 166, 255, 0.03);
