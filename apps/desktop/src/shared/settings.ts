@@ -10,7 +10,7 @@ export interface PricingService {
 }
 
 export interface AppSettings {
-  appearance: { theme: ThemePref; sidebarCollapsed: boolean }
+  appearance: { theme: ThemePref; sidebarCollapsed: boolean; backgroundFx: boolean }
   company: {
     name: string
     website: string
@@ -91,7 +91,7 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  appearance: { theme: 'system', sidebarCollapsed: false },
+  appearance: { theme: 'dark', sidebarCollapsed: false, backgroundFx: true },
   company: { name: '', website: '', description: '', services: '', signature: '', senderName: '' },
   agent: {
     enabled: true,

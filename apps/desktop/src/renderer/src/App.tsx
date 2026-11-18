@@ -3,8 +3,9 @@ import { Sidebar } from './components/Sidebar'
 import { ConfirmHost, Toasts } from './components/ui'
 import { SubscriptionButton } from './components/Subscription'
 import { WhatsAppMenu } from './components/WhatsAppMenu'
+import { BackgroundFx } from './components/BackgroundFx'
 import { NavContext, type PageId } from './lib/nav'
-import { onEvent, rpc } from './lib/rpc'
+import { onEvent, rpc, useQuery } from './lib/rpc'
 import { applyTheme } from './lib/theme'
 import { Dashboard } from './pages/Dashboard'
 import { MapsPage } from './pages/discovery/Maps'
@@ -72,9 +73,12 @@ export function App() {
   }
 
   const Page = PAGES[nav.page] ?? Dashboard
+  const { data: settings } = useQuery<any>('settings:get', [], { events: ['settings:*'] })
 
   return (
     <NavContext.Provider value={{ ...nav, go }}>
+      <BackgroundFx enabled={settings?.appearance?.backgroundFx !== false} />
+      <div className="accent-line" />
       <div className="shell">
         <Sidebar collapsed={collapsed} onToggle={toggle} />
         <main className="main">

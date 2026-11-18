@@ -42,7 +42,7 @@ export const SETTINGS_INFO: Record<string, { about: string; kind: Kind; min?: nu
   'pricing.currency': { about: 'currency for price suggestions (e.g. PKR, USD)', kind: 'text' },
   'pricing.notes': { about: 'standing pricing notes', kind: 'text' },
   'notifications.desktop': { about: 'desktop notifications', kind: 'boolean' },
-  'appearance.theme': { about: 'theme', kind: { oneOf: ['light', 'dark', 'system'] } },
+  'appearance.backgroundFx': { about: '3D background animation on/off', kind: 'boolean' },
   'remoteAdmin.enabled': { about: 'WhatsApp remote control on/off (the admin number itself is only changed in Settings)', kind: 'boolean' },
   'remoteAdmin.notifyReplies': { about: 'WhatsApp me every new client reply', kind: 'boolean' },
   'remoteAdmin.notifyInterested': { about: 'WhatsApp me when a customer is interested', kind: 'boolean' },

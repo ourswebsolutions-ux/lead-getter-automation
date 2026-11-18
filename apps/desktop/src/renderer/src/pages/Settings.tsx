@@ -23,14 +23,13 @@ export function SettingsPage() {
         <Tabs value={tab} onChange={setTab} tabs={[{ value: 'general', label: 'General' }, { value: 'remote', label: 'WhatsApp Remote Admin' }, { value: 'integrations', label: 'Integrations' }, { value: 'verification', label: 'Verification & crawling' }, { value: 'compliance', label: 'Compliance' }, { value: 'data', label: 'Data & privacy' }]} />
         {tab === 'general' && (
           <div className="col gap-16">
-            <Card title="Appearance">
-              <Field label="Theme" hint="System follows your operating system’s light/dark setting.">
-                <Segmented
-                  value={s.appearance.theme}
-                  onChange={(v) => { applyTheme(v, true); void save({ appearance: { ...s.appearance, theme: v } }, 'Theme updated') }}
-                  options={[{ value: 'light', label: <><Sun size={13} /> Light</> }, { value: 'dark', label: <><Moon size={13} /> Dark</> }, { value: 'system', label: <><Monitor size={13} /> System</> }]}
-                />
-              </Field>
+            <Card title="Appearance" sub="Forvonix chrome-noir theme">
+              <SwitchRow
+                title="3D background animation"
+                desc="Turning chrome sphere, grid and stars behind the app. It pauses while the window is hidden; turn it off on slow computers."
+                on={s.appearance.backgroundFx !== false}
+                onChange={(v) => save({ appearance: { ...s.appearance, backgroundFx: v } }, v ? 'Animation on' : 'Animation off')}
+              />
             </Card>
             <Card title="Notifications">
               <SwitchRow title="Desktop notifications" desc="Replies, approvals needed and finished tasks — shown when the app is in the background." on={s.notifications.desktop} onChange={(v) => save({ notifications: { desktop: v } })} />

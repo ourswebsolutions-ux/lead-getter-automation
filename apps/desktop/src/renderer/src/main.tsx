@@ -1,5 +1,6 @@
 import { createRoot } from 'react-dom/client'
 import './styles/global.css'
+import './styles/forvonix.css'
 import './lib/theme'
 import { App } from './App'
 

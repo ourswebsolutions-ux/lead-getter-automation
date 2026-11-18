@@ -9,8 +9,10 @@ let pref: ThemePref = (() => {
   }
 })()
 
-export function resolved(p: ThemePref = pref): 'light' | 'dark' {
-  return p === 'system' ? (mq.matches ? 'dark' : 'light') : p
+/** The Forvonix brand is dark-first: the app always renders the dark brand theme. */
+export function resolved(_p: ThemePref = pref): 'light' | 'dark' {
+  void mq
+  return 'dark'
 }
 
 export function applyTheme(p: ThemePref, animate = false): void {
