@@ -251,8 +251,20 @@ Never give discounts yourself — say the owner will confirm.`
 function BusinessPrompt() {
   const { data: s, reload } = useQuery<any>('settings:get', [], { events: ['settings:*'] })
   const [text, setText] = useState<string | null>(null)
+  const [result, setResult] = useState<{ filled: string[]; knowledge: string[] } | null>(null)
   const { busy, run } = useAction()
   const saved = s?.agent?.businessPrompt ?? ''
+  // Save the brief, then let the AI fill the company profile, signature, tone and knowledge cards from it.
+  const saveAndFill = async (t: string) => {
+    const ok = await run('bp', () => rpc('settings:update', { agent: { ...s.agent, businessPrompt: t.trim() } }), { success: 'Business prompt saved' })
+    if (ok === undefined) return
+    reload()
+    const r = await run('fill', () => rpc<{ filled: string[]; knowledge: string[] }>('knowledge:fill', t), {
+      success: (x: any) => `Filled ${x.filled.length + x.knowledge.length} things from your prompt`,
+      error: 'Saved — but the AI could not fill the fields'
+    })
+    if (r) setResult(r)
+  }
   useEffect(() => {
     if (s && text === null) setText(saved)
   }, [s])
@@ -262,12 +274,17 @@ function BusinessPrompt() {
   return (
     <Card
       title="Business prompt"
-      sub="Write about your business and how the AI should deal with customers — in your own words. Used in every email and WhatsApp reply."
+      sub="Write or paste everything about your business and how to deal with customers. On save, the AI fills your company profile, signature, tone and the cards below by itself."
       actions={
         <div className="row" style={{ gap: 8 }}>
           {!text && <Button size="sm" variant="ghost" onClick={() => setText(PROMPT_EXAMPLE)}>Use example</Button>}
-          <Button size="sm" variant="primary" disabled={!dirty} loading={busy === 'bp'} onClick={() => run('bp', () => rpc('settings:update', { agent: { ...s.agent, businessPrompt: text.trim() } }), { success: 'Business prompt saved' }).then(reload)}>
-            {dirty ? 'Save' : 'Saved'}
+          {!dirty && text.trim().length > 40 && (
+            <Button size="sm" loading={busy === 'fill'} onClick={() => saveAndFill(text)}>
+              Fill everything again
+            </Button>
+          )}
+          <Button size="sm" variant="primary" disabled={!dirty} loading={busy === 'bp' || busy === 'fill'} onClick={() => saveAndFill(text)}>
+            {busy === 'fill' ? 'AI is filling…' : dirty ? 'Save & fill everything' : 'Saved'}
           </Button>
         </div>
       }
@@ -279,6 +296,11 @@ function BusinessPrompt() {
         {tokens > 2500 && <span style={{ color: 'var(--amber)' }}>Long prompts use more AI tokens on every reply (free plans have daily limits).</span>}
         {dirty && <span style={{ color: 'var(--accent)' }}>Not saved yet</span>}
       </div>
+      {result && (
+        <div className="ag-out" style={{ marginTop: 10, WebkitLineClamp: 'unset', display: 'block' }}>
+          <b>Filled from your prompt:</b> {[...result.filled, ...result.knowledge].join(' · ') || 'nothing new — everything was already up to date'}
+        </div>
+      )}
     </Card>
   )
 }

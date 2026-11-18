@@ -250,3 +250,32 @@ describe('business prompt', () => {
     expect((generateJson as any).mock.calls[0][0].system).toContain('Always be friendly and reply in Roman Urdu')
   })
 })
+
+describe('fill everything from one prompt', () => {
+  beforeEach(() => setup())
+  it('fills the company profile, tone, currency and knowledge cards from what the text says', async () => {
+    updateSettings({ company: { ...getSettings().company, website: 'https://keep.test' } })
+    reply = (req: any) =>
+      req.purpose === 'business_info'
+        ? {
+            company: { name: 'Automas Software', website: '', description: 'Web and app company in Lahore.', services: 'Websites\nOnline stores', signature: 'Ali\nAutomas', senderName: 'Ali' },
+            tone: 'friendly',
+            language: 'Roman Urdu',
+            currency: 'pkr',
+            knowledge: [
+              { topic: 'pricing', title: 'Packages', content: 'Starter website Rs 35,000' },
+              { topic: 'hours', title: 'Office hours', content: 'Mon–Sat 10am–7pm' }
+            ]
+          }
+        : base
+    const { fillFromText } = await import('../src/main/services/ai/businessInfo')
+    const r = await fillFromText('We are Automas Software in Lahore. Starter website Rs 35,000. Office Mon–Sat 10am–7pm. Talk friendly in Roman Urdu. — Ali')
+    const s = getSettings()
+    expect(s.company).toMatchObject({ name: 'Automas Software', website: 'https://keep.test', senderName: 'Ali', signature: 'Ali\nAutomas' })
+    expect(s.agent).toMatchObject({ tone: 'friendly', language: 'Roman Urdu' })
+    expect(s.pricing.currency).toBe('PKR')
+    expect(K.listKnowledge().map((k) => k.title)).toEqual(['Packages', 'Office hours'])
+    expect(r.knowledge).toHaveLength(2)
+    await expect(fillFromText('short')).rejects.toThrow(/a bit more/)
+  })
+})

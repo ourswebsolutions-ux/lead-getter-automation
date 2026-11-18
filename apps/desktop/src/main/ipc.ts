@@ -300,6 +300,7 @@ const handlers: Record<string, Handler> = {
   },
   'knowledge:list': () => knowledge.listKnowledge(),
   'knowledge:save': (item) => knowledge.saveKnowledge(item),
+  'knowledge:fill': async (text?: string) => (await import('./services/ai/businessInfo')).fillFromText(text ?? getSettings().agent.businessPrompt),
   'knowledge:delete': (id: number) => knowledge.deleteKnowledge(id),
   'agent:overview': () => autoAgent.agentOverview(),
   'agent:activity': (opts) => autoAgent.agentActivity(opts ?? {}),

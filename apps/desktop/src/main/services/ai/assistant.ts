@@ -15,6 +15,7 @@ import { addEmailAccount } from '../emailAutoConfig'
 import { CATALOG, CATALOG_CHANNELS } from './assistantCatalog'
 import * as knowledge from '../knowledge'
 import { writeTemplate } from './writer'
+import { fillFromText } from './businessInfo'
 import { changeSettings, findSettings, settingsList } from './settingsCatalog'
 import { computerAction, canDo, isLocked } from '../../core/computer'
 import type { LeadFilter } from '@shared/types'
@@ -456,6 +457,21 @@ const TOOLS: Record<string, Tool> = {
       return runPending()
     }
   },
+  fill_business_info: {
+    args: '{}',
+    desc: "The user pasted/wrote a lot of info about their business (company, services, prices, hours, policies, how to talk to customers): read it from their message and fill every field of the app at once (company profile, signature, tone, knowledge cards). No arguments — it reads the user's message itself.",
+    run: async (_a, ctx) => {
+      // The user's own message (or, for "save all this", their latest long message) — never retyped by the model.
+      const own = db().get<{ content: string }>("SELECT content FROM assistant_messages WHERE id = ? AND role = 'user'", ctx.userMessageId)?.content ?? ''
+      const text =
+        own.length >= 120
+          ? own
+          : db().get<{ content: string }>("SELECT content FROM assistant_messages WHERE role = 'user' AND id <= ? AND length(content) >= 120 ORDER BY id DESC LIMIT 1", ctx.userMessageId)?.content ?? own
+      const r = await fillFromText(text)
+      if (!getSettings().agent.businessPrompt?.trim()) changeSettings({ 'agent.businessPrompt': text })
+      return { ...r, _button: { label: 'See what the agent knows', page: 'agent', params: { tab: 'knowledge' } } }
+    }
+  },
   save_org_info: {
     args: '{"topic": "company"|"services"|"pricing"|"policies"|"contact"|"hours"|"faq"|"style"|"other", "title": string, "content": string, "private"?: boolean}',
     desc: 'Save business info the email/WhatsApp agent must know (same topic+title replaces). private = owner-only, never told to customers. Split long info into several items.',
@@ -843,6 +859,7 @@ RULES
 - Deletes, removals, sending messages and other risky actions always show an approval summary first; then wait for the user's yes.
 - Email accounts: the user may type the email + app password in chat — the app adds the account locally and hides the password before you see it (you will see the result as a tool note). Or offer add_email_account (form button). Never ask the user to repeat a password and never write one.
 - Never invent prices, promises or facts about the user's business.
+- When the user pastes or writes a lot about their business at once, call fill_business_info (it reads their message and fills everything). For a single small fact, use save_org_info.
 - When the user tells you about their business (services, prices, packages, policies, hours, contact, FAQs, how to talk to customers), save it with save_org_info right away — one item per topic — so the email/WhatsApp agent uses it. Save EVERY detail given: location/address/phone → contact, how to talk to customers (tone, language) → style, prices → pricing exactly as written. Confirm briefly what you saved.
 - Never write a campaign summary or ask "approve?" yourself — only prepare_campaign creates a campaign summary. Every number you state must come from a tool result.
 - Never mention tool names (like search_status) to the user; say it in plain words ("I can check progress for you").
