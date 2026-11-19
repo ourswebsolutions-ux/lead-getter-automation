@@ -32,5 +32,7 @@ linux:
   category: Office
   maintainer: Lead Getter Enterprise
 publish:
-  provider: generic
-  url: https://updates.example.com/lead-getter-enterprise
+  provider: github
+  owner: ourswebsolutions-ux
+  repo: lead-getter-automation
+  releaseType: release
