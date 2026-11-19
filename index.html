@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lead Getter Enterprise — AI lead generation & sales agent</title>
+<meta name="description" content="Desktop app that finds business leads on Google Maps, verifies their emails, runs email & WhatsApp campaigns and lets an AI sales agent answer your customers — controlled by chat or from your WhatsApp." />
+<meta property="og:title" content="Lead Getter Enterprise" />
+<meta property="og:description" content="Find leads, verify emails, run campaigns and let an AI agent answer your customers." />
+<meta property="og:image" content="assets/shots/assistant.webp" />
+<link rel="icon" href="assets/icon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;900&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/site.css" />
+</head>
+<body>
+<canvas id="fx" aria-hidden="true"></canvas>
+<div class="progress" id="progress"></div>
+
+<header>
+  <nav>
+    <div class="wrap">
+      <a class="logo" href="#top"><img src="assets/icon.png" alt="" /><span class="chrome">Lead Getter<small>ENTERPRISE</small></span></a>
+      <div class="links" id="links">
+        <a href="#features">Features</a>
+        <a href="#how">How it works</a>
+        <a href="#download">Download</a>
+        <a href="#guide">Guide</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#faq">FAQ</a>
+      </div>
+      <a class="btn btn-p nav-cta" href="#download">Download</a>
+      <button class="menu-btn" id="menuBtn" aria-label="Menu">☰</button>
+    </div>
+  </nav>
+</header>
+
+<main id="top">
+  <div class="hero wrap">
+    <span class="badge"><i></i> VERSION <span data-version>1.0.0</span><span class="extra">&nbsp;· NOW WITH AI SALES AGENT</span></span>
+    <h1><span class="chrome">Your next clients, found and answered</span> by AI.</h1>
+    <p class="lead">Lead Getter Enterprise finds businesses on Google Maps, verifies their emails, runs email &amp; WhatsApp campaigns — and an AI sales agent answers your customers 24/7. Run everything by chatting, in English or Roman Urdu, even from your WhatsApp.</p>
+    <div class="cta">
+      <a class="btn btn-hot" id="heroDl" href="#download">⬇ Download <small id="heroOs">for your computer</small></a>
+      <a class="btn btn-s" href="#how">See how it works</a>
+    </div>
+    <p class="small-note">Windows · Linux — free download with a 2-day free trial · plans from PKR 4,500</p>
+    <div class="shot reveal">
+      <div class="bar"><span></span><span></span><span></span></div>
+      <img src="assets/shots/assistant.webp" alt="AI Assistant running a Google Maps search and preparing a campaign" width="1480" height="920" />
+    </div>
+  </div>
+
+  <section id="features" class="alt">
+    <div class="wrap">
+      <div class="head reveal">
+        <span class="tag">Everything in one app</span>
+        <h2><span class="chrome">From a search to a signed client</span></h2>
+        <p class="muted">Every part works on its own — or tell the AI Assistant what you want and it runs the steps for you.</p>
+      </div>
+      <div class="grid3 reveal">
+        <div class="cell ai"><div class="ico">✦</div><h3>AI Assistant</h3><p>Type “Search shoe shops in Lahore and save them in Shoes” — it searches, saves, finds emails and prepares a campaign. English or Roman Urdu.</p></div>
+        <div class="cell"><div class="ico">⌖</div><h3>Google Maps Search</h3><p>Businesses with phone, address and website, saved into categories. Duplicates skipped, emails found on their websites automatically.</p></div>
+        <div class="cell"><div class="ico">✓</div><h3>Email Verification</h3><p>Paste any list, press Verify, filter green / red / risky and export only the good emails as CSV or TXT.</p></div>
+        <div class="cell"><div class="ico">✉</div><h3>Email Campaigns</h3><p>Add Gmail or any email with just the password. Pick a category and press Run — AI writes a personal email for each business.</p></div>
+        <div class="cell ai"><div class="ico">◈</div><h3>AI Sales Agent</h3><p>Answers email and WhatsApp customers like a trained team member, from what you teach it. Prices it doesn’t know and complaints wait for you.</p></div>
+        <div class="cell"><div class="ico">☏</div><h3>WhatsApp Remote Admin</h3><p>Control the software from your own WhatsApp: searches, campaigns, reports, client replies — even lock or power off the computer.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="feature reveal">
+        <div class="txt">
+          <span class="tag">AI Sales Agent</span>
+          <h2><span class="chrome">Teach it once. It answers 24/7.</span></h2>
+          <p class="muted">Write about your business in your own words — services, prices, hours, how to talk to customers. The AI fills your profile and answers every email and WhatsApp message from it.</p>
+          <ul>
+            <li>Replies after 30 minutes (you choose), at natural random times</li>
+            <li>Only quotes prices you saved — never invents a discount</li>
+            <li>Complaints, payments and refunds always wait for you</li>
+            <li>“Don’t message me” stops email and WhatsApp everywhere</li>
+          </ul>
+        </div>
+        <div class="frame"><img src="assets/shots/knowledge.webp" alt="Business prompt and knowledge cards" loading="lazy" /></div>
+      </div>
+      <div class="feature rev reveal">
+        <div class="txt">
+          <span class="tag">Google Maps Search</span>
+          <h2><span class="chrome">Leads appear while Chrome searches.</span></h2>
+          <p class="muted">Type a keyword and place. Each business is saved with its phone, address and website, and its email is found and verified in the background.</p>
+          <ul>
+            <li>Saved straight into your categories, duplicates skipped</li>
+            <li>Emails read from websites and contact pages — never guessed</li>
+            <li>Pauses on CAPTCHAs — never bypasses them</li>
+          </ul>
+        </div>
+        <div class="frame"><img src="assets/shots/dashboard.webp" alt="Dashboard with leads and verified emails" loading="lazy" /></div>
+      </div>
+      <div class="feature reveal">
+        <div class="txt">
+          <span class="tag">Email Verification</span>
+          <h2><span class="chrome">Paste. Verify. Export.</span></h2>
+          <p class="muted">Paste emails in any format. The same checker used by the Maps search asks each mail server whether the mailbox exists — no email is sent.</p>
+          <ul>
+            <li>Duplicates and non-emails removed automatically</li>
+            <li>Live progress, Stop / Continue, results kept after closing</li>
+            <li>Export verified, selected or all — CSV or TXT</li>
+          </ul>
+        </div>
+        <div class="frame"><img src="assets/shots/verification.webp" alt="Email verification results table" loading="lazy" /></div>
+      </div>
+      <div class="feature rev reveal">
+        <div class="txt">
+          <span class="tag">Campaigns</span>
+          <h2><span class="chrome">One click. Every email personal.</span></h2>
+          <p class="muted">Choose who to email — the AI writes a template for the category and personalises it for each business. Accounts rotate, daily limits and sending hours are respected.</p>
+          <ul>
+            <li>Only verified emails are contacted</li>
+            <li>Replies stop follow-ups automatically</li>
+            <li>WhatsApp campaigns with careful daily limits too</li>
+          </ul>
+        </div>
+        <div class="frame"><img src="assets/shots/email-launch.webp" alt="New email campaign" loading="lazy" /></div>
+      </div>
+      <div class="feature reveal">
+        <div class="txt">
+          <span class="tag">WhatsApp Remote Admin</span>
+          <h2><span class="chrome">Your software, in your pocket.</span></h2>
+          <p class="muted">Message the app from your own verified WhatsApp number in plain words. It does the work and replies with the real result.</p>
+          <div class="says">
+            <span class="say">“aaj kitni verified emails mili?”</span>
+            <span class="say">“tamam campaigns pause kr do”</span>
+            <span class="say">“system status”</span>
+            <span class="say">“pc lock kr do”</span>
+          </div>
+        </div>
+        <div class="frame"><img src="assets/shots/remote.webp" alt="WhatsApp Remote Admin settings" loading="lazy" /></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how" class="alt">
+    <div class="wrap">
+      <div class="head reveal">
+        <span class="tag">Getting started</span>
+        <h2><span class="chrome">From download to first client in minutes</span></h2>
+      </div>
+      <div class="steps reveal">
+        <div class="step"><div class="num">01</div><h3>Install &amp; activate</h3><p class="muted">Download for your computer and open it. You get a 2-day free trial; choose a plan and enter the code we send you.</p></div>
+        <div class="step"><div class="num">02</div><h3>Teach your business</h3><p class="muted">Add an AI key and your email, then write about your business once. The AI fills everything in.</p></div>
+        <div class="step"><div class="num">03</div><h3>Just say what you want</h3><p class="muted">“Search restaurants in Dubai, find their emails and start a website campaign.” Then watch the replies come in.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="wrap">
+      <div class="head reveal">
+        <span class="tag">Download · version <span data-version>1.0.0</span></span>
+        <h2><span class="chrome">Free download, 2-day free trial</span></h2>
+        <p class="muted">Pick your computer. Installed copies check for new versions by themselves.</p>
+      </div>
+      <div class="dl-grid reveal">
+        <div class="dl" id="dl-win">
+          <div class="os"><span class="os-ico">⊞</span><b>Windows 10 / 11</b><span class="rec push">64-BIT</span></div>
+          <div class="files">
+            <a class="file" data-asset="portable.exe" href="https://github.com/ourswebsolutions-ux/lead-getter-automation/releases/download/v1.0.0/Lead-Getter-Enterprise-1.0.0-portable.exe">
+              <span>💾</span><span><span class="n">Single .exe file</span> <span class="rec">RECOMMENDED</span><br /><span class="d">Download and double-click. No installation.</span></span><span class="sz" data-size>112 MB</span>
+            </a>
+            <a class="file" data-asset="win-x64.zip" href="https://github.com/ourswebsolutions-ux/lead-getter-automation/releases/download/v1.0.0/Lead-Getter-Enterprise-1.0.0-win-x64.zip">
+              <span>🗜</span><span><span class="n">Zip folder</span><br /><span class="d">Extract all, then open “Lead Getter Enterprise.exe”. Starts faster.</span></span><span class="sz" data-size>153 MB</span>
+            </a>
+          </div>
+        </div>
+        <div class="dl" id="dl-linux">
+          <div class="os"><span class="os-ico">🐧</span><b>Linux</b><span class="rec push">X64</span></div>
+          <div class="files">
+            <a class="file" data-asset=".AppImage" href="https://github.com/ourswebsolutions-ux/lead-getter-automation/releases/download/v1.0.0/Lead-Getter-Enterprise-1.0.0.AppImage">
+              <span>📦</span><span><span class="n">AppImage</span> <span class="rec">ANY LINUX</span><br /><span class="d">Make it executable, then double-click.</span></span><span class="sz" data-size>136 MB</span>
+            </a>
+            <a class="file" data-asset=".deb" href="https://github.com/ourswebsolutions-ux/lead-getter-automation/releases/download/v1.0.0/lead-getter-enterprise_1.0.0_amd64.deb">
+              <span>🧩</span><span><span class="n">.deb package</span><br /><span class="d">Ubuntu, Debian, Mint — installs like any app.</span></span><span class="sz" data-size>102 MB</span>
+            </a>
+          </div>
+        </div>
+      </div>
+      <p class="trial">Needs <b>Google Chrome</b> for Google Maps Search, and a free AI key (Groq) or Claude / OpenAI / Gemini for the AI features. · <a class="link" href="https://github.com/ourswebsolutions-ux/lead-getter-automation/releases">All releases &amp; what’s new →</a></p>
+    </div>
+  </section>
+
+  <section id="guide" class="alt">
+    <div class="wrap">
+      <div class="head reveal">
+        <span class="tag">Guide</span>
+        <h2><span class="chrome">Install and set up — step by step</span></h2>
+      </div>
+      <div class="tabs reveal" role="tablist">
+        <button class="on" data-tab="win">Install on Windows</button>
+        <button data-tab="linux">Install on Linux</button>
+        <button data-tab="setup">First-time setup</button>
+        <button data-tab="use">Daily use</button>
+      </div>
+
+      <div class="panel on" id="tab-win"><div class="guide">
+        <div class="g"><span class="k">1</span><div><h3>Download the single .exe</h3><p>Click <b>Single .exe file</b> above. Your browser may ask whether to keep it — choose <b>Keep</b>.</p></div></div>
+        <div class="g"><span class="k">2</span><div><h3>Open it</h3><p>Double-click <code>Lead-Getter-Enterprise-1.0.0-portable.exe</code>. If Windows shows “Windows protected your PC”, click <b>More info → Run anyway</b> (the app is not code-signed yet). The first start takes a few seconds.</p></div></div>
+        <div class="g"><span class="k">3</span><div><h3>Prefer the zip?</h3><p>Right-click the zip → <b>Extract All</b> → open the folder → double-click <code>Lead Getter Enterprise.exe</code>. Keep all files together; the .exe alone does not run.</p></div></div>
+        <div class="g"><span class="k">4</span><div><h3>Install Google Chrome</h3><p>Google Maps Search uses your own Chrome. If you don’t have it, install it from google.com/chrome.</p></div></div>
+      </div></div>
+
+      <div class="panel" id="tab-linux"><div class="guide">
+        <div class="g"><span class="k">1</span><div><h3>AppImage (any Linux)</h3><p>Download it, then right-click → Properties → <b>Allow executing as program</b>, or run <code>chmod +x Lead-Getter-Enterprise-1.0.0.AppImage</code>. Double-click to open.</p></div></div>
+        <div class="g"><span class="k">2</span><div><h3>.deb (Ubuntu / Debian / Mint)</h3><p>Double-click the file to open it in your Software app and press Install, or run <code>sudo apt install ./lead-getter-enterprise_1.0.0_amd64.deb</code>. Open it from your apps menu.</p></div></div>
+        <div class="g"><span class="k">3</span><div><h3>Run as your normal user</h3><p>Open the app as yourself, not as <code>root</code> — otherwise it uses a different, empty profile.</p></div></div>
+        <div class="g"><span class="k">4</span><div><h3>Install Google Chrome</h3><p>Google Maps Search uses your own Chrome browser.</p></div></div>
+      </div></div>
+
+      <div class="panel" id="tab-setup"><div class="guide">
+        <div class="g"><span class="k">1</span><div><h3>Start your trial or activate</h3><p>Click your plan on the top bar. The 2-day trial starts automatically; to activate, choose a plan, send us your Activation ID on WhatsApp and enter the code you receive.</p></div></div>
+        <div class="g"><span class="k">2</span><div><h3>Add an AI key</h3><p><b>AI Sales Agent → AI providers</b>. A free Groq key (console.groq.com/keys) works well — choose the model <code>openai/gpt-oss-120b</code>. Claude, OpenAI and Gemini work too.</p></div></div>
+        <div class="g"><span class="k">3</span><div><h3>Teach your business</h3><p><b>AI Sales Agent → Knowledge → Business prompt</b>: write everything about your business — services, prices, hours, how to talk to customers — and press <b>Save &amp; fill everything</b>.</p></div></div>
+        <div class="g"><span class="k">4</span><div><h3>Add your email</h3><p><b>Email → Add account</b>: just your email and password. For Gmail use an <b>App Password</b> (Google Account → Security → 2-Step Verification → App passwords). The server is found automatically.</p></div></div>
+        <div class="g"><span class="k">5</span><div><h3>Connect WhatsApp (optional)</h3><p>Top bar → <b>Connect WhatsApp</b> → scan the QR code from your phone (WhatsApp → Linked devices).</p></div></div>
+        <div class="g"><span class="k">6</span><div><h3>Control it from your phone (optional)</h3><p><b>Settings → WhatsApp Remote Admin</b>: enter your own number, press <b>Send code</b>, reply with the code, and switch it on. Turn on <b>Start with the computer</b> so it is always ready.</p></div></div>
+      </div></div>
+
+      <div class="panel" id="tab-use"><div class="guide">
+        <div class="g"><span class="k">1</span><div><h3>Just ask the AI Assistant</h3><p>It is the first page. Try:</p><div class="says"><span class="say">Search software houses in Lahore and save them in Software</span><span class="say">Software ki emails find kro</span><span class="say">Start an email campaign for Software</span><span class="say">Pending replies dikhao</span></div></div></div>
+        <div class="g"><span class="k">2</span><div><h3>Approve what matters</h3><p>Campaigns, deletes and sending messages always show a summary first — click <b>Approve</b> or reply “yes”.</p></div></div>
+        <div class="g"><span class="k">3</span><div><h3>Let the agent handle replies</h3><p><b>AI Sales Agent → Agent</b>: turn on <b>Auto reply</b> and choose the reply delay. Everything it does appears in <b>Agent activity</b>; you can reply yourself or take over any conversation at any time.</p></div></div>
+        <div class="g"><span class="k">4</span><div><h3>Verify any list</h3><p><b>Email Verification</b>: paste emails, press <b>Verify</b>, filter the green ones and export.</p></div></div>
+      </div></div>
+    </div>
+  </section>
+
+  <section id="pricing">
+    <div class="wrap">
+      <div class="head reveal">
+        <span class="tag">Pricing</span>
+        <h2><span class="chrome">Every feature in every plan</span></h2>
+        <p class="muted">Plans differ only in length. Pay by WhatsApp and receive your activation code.</p>
+      </div>
+      <div class="plans reveal">
+        <div class="plan">
+          <span class="pn">Monthly</span>
+          <div class="price chrome">PKR 4,500 <small>/ month</small></div>
+          <ul><li>All lead discovery</li><li>Email verification</li><li>AI Sales Agent</li><li>WhatsApp &amp; email campaigns</li></ul>
+          <a class="btn btn-s" data-buy="Basic Monthly (PKR 4,500)" href="#">Buy on WhatsApp</a>
+        </div>
+        <div class="plan hot">
+          <span class="ribbon">MOST POPULAR</span>
+          <span class="pn">Six months</span>
+          <div class="price chrome">PKR 15,000 <small>/ 6 months</small></div>
+          <ul><li>Everything in Monthly</li><li>Save 44% vs monthly</li><li>Priority support</li></ul>
+          <a class="btn btn-hot" data-buy="Six-Month Plan (PKR 15,000)" href="#">Buy on WhatsApp</a>
+        </div>
+        <div class="plan ent">
+          <span class="ribbon v">BEST VALUE</span>
+          <span class="pn">Lifetime</span>
+          <div class="price chrome">PKR 50,000 <small>once</small></div>
+          <ul><li>Everything, forever</li><li>All 1.x updates</li><li>Priority support</li></ul>
+          <a class="btn btn-p" data-buy="Lifetime Plan (PKR 50,000)" href="#">Buy on WhatsApp</a>
+        </div>
+      </div>
+      <p class="trial">Try everything free for 2 days — no payment needed to start.</p>
+    </div>
+  </section>
+
+  <section id="faq" class="alt">
+    <div class="wrap">
+      <div class="head reveal"><span class="tag">FAQ</span><h2><span class="chrome">Questions</span></h2></div>
+      <div class="faq reveal">
+        <details><summary>Where is my data stored?</summary><p>On your own computer. Leads, conversations and settings are kept in a local database; passwords and keys are encrypted with your system’s keychain.</p></details>
+        <details><summary>Do I need to pay for AI?</summary><p>No — a free Groq key is enough to start (it has a daily limit). For heavy use you can upgrade Groq or use Claude, OpenAI or Gemini with your own key.</p></details>
+        <details><summary>Will the AI send something wrong to my customers?</summary><p>It answers only from what you teach it. It never invents prices or discounts; complaints, payments, refunds and anything it doesn’t know wait for your approval. You can keep Auto reply off so every reply waits for you.</p></details>
+        <details><summary>Can I use Gmail?</summary><p>Yes. Add it with a Google App Password. Microsoft 365, Zoho, GoDaddy, Hostinger, cPanel mail and most others are detected automatically.</p></details>
+        <details><summary>Is WhatsApp safe to use?</summary><p>It links like WhatsApp Web. Keep daily limits low and message people with a real business reason; opt-outs are respected automatically.</p></details>
+        <details><summary>Windows says “Windows protected your PC”.</summary><p>The app is not code-signed yet. Click <b>More info → Run anyway</b>.</p></details>
+        <details><summary>Does it work when the window is closed?</summary><p>Yes. Closing the window keeps it running in the background (tray icon) so the AI agent, campaigns and WhatsApp control keep working. Quit it from the tray icon.</p></details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="fgrid">
+      <div>
+        <a class="logo" href="#top"><img src="assets/icon.png" alt="" /><span class="chrome">Lead Getter<small>ENTERPRISE</small></span></a>
+        <p class="fdesc">AI lead generation, email verification, campaigns and a sales agent that never sleeps.</p>
+      </div>
+      <div><h4>Product</h4><a href="#features">Features</a><a href="#download">Download</a><a href="#pricing">Pricing</a></div>
+      <div><h4>Help</h4><a href="#guide">Guide</a><a href="#faq">FAQ</a><a href="https://github.com/ourswebsolutions-ux/lead-getter-automation/releases">What’s new</a></div>
+      <div><h4>Contact</h4><a data-wa href="#">WhatsApp</a></div>
+    </div>
+    <div class="copy"><span>© <span id="year">2026</span> Lead Getter Enterprise</span><span>Version <span data-version>1.0.0</span></span></div>
+  </div>
+</footer>
+
+<a class="wa-float" data-wa href="#" aria-label="Chat on WhatsApp">
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.6 14.2c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.2-.7-2.7-1.1-4.4-3.9-4.6-4.1-.1-.2-1.1-1.5-1.1-2.8 0-1.3.7-2 1-2.3.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 1.9c.1.2.1.4 0 .5l-.3.5-.4.4c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.7-.1l.9-1.1c.2-.3.4-.2.7-.1l1.8.9c.3.1.5.2.5.3.1.2.1.7-.1 1.3z"/></svg>
+</a>
+
+<script src="assets/site.js"></script>
+</body>
+</html>
