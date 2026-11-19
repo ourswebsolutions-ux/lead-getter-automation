@@ -22,7 +22,7 @@ export function setupTray(getWindow: () => BrowserWindow | null, quit: () => voi
   try {
     const icon = nativeImage.createFromPath(join(__dirname, '../../build/icon.png')).resize({ width: 18, height: 18 })
     tray = new Tray(icon)
-    tray.setToolTip('Lead Getter Enterprise — running in the background')
+    tray.setToolTip('Lead Generation — running in the background')
     const show = () => {
       const w = getWindow()
       if (w) {
@@ -32,7 +32,7 @@ export function setupTray(getWindow: () => BrowserWindow | null, quit: () => voi
     }
     tray.setContextMenu(
       Menu.buildFromTemplate([
-        { label: 'Open Lead Getter', click: show },
+        { label: 'Open Lead Generation', click: show },
         { type: 'separator' },
         { label: 'Quit (stops automations and WhatsApp control)', click: quit }
       ])
@@ -67,7 +67,7 @@ export function applyStartWithComputer(): void {
       mkdirSync(join(homedir(), '.config', 'autostart'), { recursive: true })
       writeFileSync(
         file,
-        `[Desktop Entry]\nType=Application\nName=Lead Getter Enterprise\nComment=Runs Lead Getter in the background (WhatsApp remote control, AI agent, campaigns)\nExec=${exec}\nX-GNOME-Autostart-enabled=true\nTerminal=false\n`
+        `[Desktop Entry]\nType=Application\nName=Lead Generation\nComment=Runs Lead Generation in the background (WhatsApp remote control, AI agent, campaigns)\nExec=${exec}\nX-GNOME-Autostart-enabled=true\nTerminal=false\n`
       )
     } else {
       app.setLoginItemSettings({ openAtLogin: on, openAsHidden: true, args: ['--background'] })

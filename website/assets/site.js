@@ -1,4 +1,4 @@
-/* Lead Getter Enterprise — website behaviour. Edit SITE to change the repo or the WhatsApp number. */
+/* Lead Generation — website behaviour. Edit SITE to change the repo or the WhatsApp number. */
 var SITE = {
   repo: 'ourswebsolutions-ux/lead-getter-automation',
   whatsapp: '923245237429'
@@ -11,12 +11,12 @@ var SITE = {
 
   // WhatsApp links (contact + buy a plan)
   document.querySelectorAll('[data-wa]').forEach(function (a) {
-    a.href = waLink('Hello, I have a question about Lead Getter Enterprise.')
+    a.href = waLink('Hello, I have a question about Lead Generation.')
     a.target = '_blank'
     a.rel = 'noopener'
   })
   document.querySelectorAll('[data-buy]').forEach(function (a) {
-    a.href = waLink('Hello, I would like to buy the Lead Getter Enterprise ' + a.dataset.buy + ' plan. My Activation ID is: ')
+    a.href = waLink('Hello, I would like to buy the Lead Generation ' + a.dataset.buy + ' plan. My Activation ID is: ')
     a.target = '_blank'
     a.rel = 'noopener'
   })
@@ -94,7 +94,7 @@ var SITE = {
       pointHero()
     })
     .catch(function () {
-      /* offline or rate-limited: the built-in v1.0.0 links stay */
+      /* offline or rate-limited: the built-in v1.0.1 links stay */
     })
 
   // Reveal on scroll + top progress bar

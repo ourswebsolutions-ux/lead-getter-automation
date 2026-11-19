@@ -76,7 +76,7 @@ export async function sendVerificationCode(): Promise<{ sent: true; to: string }
   code = { value: String(randomInt(100000, 1000000)), number: n, expires: Date.now() + 15 * 60_000 }
   updateSettings({ remoteAdmin: { ...s, number: n, verified: false } })
   try {
-    await wa.sendText(acc, n, `Lead Getter remote control\nYour code: *${code.value}*\nReply with this code from this number to confirm you are the admin. (Valid 15 minutes.)`)
+    await wa.sendText(acc, n, `Lead Generation remote control\nYour code: *${code.value}*\nReply with this code from this number to confirm you are the admin. (Valid 15 minutes.)`)
   } catch (e: any) {
     throw new Error(`Could not send the code: ${e.message}`)
   }
@@ -144,7 +144,7 @@ async function handle(accountId: number, text: string, meta: { offline?: boolean
       code = null
       updateSettings({ remoteAdmin: { ...cfg(), verified: true } })
       record(msg, 'done', 'verified')
-      await sendToAdmin(`✅ Verified. This number now controls Lead Getter${s.enabled ? '' : ' (turn on Remote control in Settings)'}.\nTry: "system status" or "aaj kitni verified emails mili?"`, accountId)
+      await sendToAdmin(`✅ Verified. This number now controls Lead Generation${s.enabled ? '' : ' (turn on Remote control in Settings)'}.\nTry: "system status" or "aaj kitni verified emails mili?"`, accountId)
       return
     }
     record(msg, 'ignored', 'not verified')
@@ -235,7 +235,7 @@ export function startRemoteAdmin(): void {
       const s = cfg()
       if (s.enabled && s.verified && s.number && (!s.accountId || s.accountId === evt.payload.accountId)) {
         announced = true
-        setTimeout(() => void sendToAdmin('🟢 Lead Getter is running. You can send commands here.'), 3000)
+        setTimeout(() => void sendToAdmin('🟢 Lead Generation is running. You can send commands here.'), 3000)
       }
     }
   })
@@ -245,7 +245,7 @@ export function startRemoteAdmin(): void {
 export async function announceShutdown(): Promise<void> {
   const s = cfg()
   if (!s.enabled || !s.verified) return
-  await Promise.race([sendToAdmin('🔴 Lead Getter is turning off. Remote commands will not work until it is started again on the computer.'), new Promise((r) => setTimeout(r, 6000))])
+  await Promise.race([sendToAdmin('🔴 Lead Generation is turning off. Remote commands will not work until it is started again on the computer.'), new Promise((r) => setTimeout(r, 6000))])
 }
 
 export function remoteStatus() {

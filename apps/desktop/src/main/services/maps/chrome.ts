@@ -76,7 +76,7 @@ export class ChromeSession {
       )
       this.child.on('error', (e) => log.error('Chrome failed to start', e))
       ep = await this.endpoint(30_000)
-      if (!ep) throw new Error('Chrome did not start. Close any Chrome window opened by Lead Getter and try again.')
+      if (!ep) throw new Error('Chrome did not start. Close any Chrome window opened by Lead Generation and try again.')
     }
     onStep('Connecting to Chrome')
     this.browser = await chromium.connectOverCDP(ep, { timeout: 30_000 })

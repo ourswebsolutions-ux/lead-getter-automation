@@ -23,6 +23,8 @@ import { resumeOnStartup as resumeVerifyList } from './services/verifyList'
 import { setAppControls } from './services/ai/assistant'
 
 // Separate identity from any other "Lead Getter" install: own userData dir, own DB, own sessions.
+// Internal identity stays 'Lead Getter Enterprise': the OS keychain (safeStorage) keys saved passwords
+// and API keys by this name, so changing it would lose them. Users see "Lead Generation" (window, tray, menus).
 app.setName('Lead Getter Enterprise')
 app.setPath('userData', !app.isPackaged && process.env.LGE_USER_DATA ? process.env.LGE_USER_DATA : join(app.getPath('appData'), 'lead-getter-enterprise'))
 
@@ -83,7 +85,7 @@ function createWindow(): void {
     minWidth: 1100,
     minHeight: 700,
     show: false,
-    title: 'Lead Getter Enterprise',
+    title: 'Lead Generation',
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0E0F11' : '#F6F6F4',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     autoHideMenuBar: true,

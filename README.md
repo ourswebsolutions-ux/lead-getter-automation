@@ -1,6 +1,6 @@
-# Lead Getter Enterprise
+# Lead Generation
 
-AI-powered lead generation and automated sales platform — a **new, independent desktop application** (Windows, macOS, Linux). It shares no code, database, configuration, activation system or backend with the original Lead Getter.
+AI-powered lead generation and automated sales platform — a **new, independent desktop application** (Windows, macOS, Linux). It shares no code, database, configuration, activation system or backend with the original Lead Generation.
 
 | Area | What it does |
 |---|---|

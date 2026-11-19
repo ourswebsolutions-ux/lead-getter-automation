@@ -90,8 +90,8 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         {!collapsed && (
           <>
             <div className="sb-title">
-              Lead Getter
-              <small>Enterprise</small>
+              Lead
+              <small>Generation</small>
             </div>
             <button className="sb-bell" onClick={() => go(counts?.pendingApprovals ? 'agent' : 'conversations')} title="Notifications">
               <Bell size={17} />

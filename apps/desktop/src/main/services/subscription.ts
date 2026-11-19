@@ -190,7 +190,7 @@ export async function requestOtp(input: { planCode: string; name?: string; phone
   const phone = input.phone?.trim().slice(0, 40) || '-'
   try {
     await m.sendMail({
-      from: `Lead Getter Enterprise <${OTP_EMAIL() || 'noreply@localhost'}>`,
+      from: `Lead Generation <${OTP_EMAIL() || 'noreply@localhost'}>`,
       to: OTP_EMAIL() || 'vendor@localhost',
       subject: `OTP ${code} — ${plan.name} activation request`,
       text: [

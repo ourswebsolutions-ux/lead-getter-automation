@@ -1,11 +1,11 @@
 {
   "name": "lead-getter-enterprise",
-  "productName": "Lead Getter Enterprise",
-  "version": "1.0.0",
+  "productName": "Lead Generation",
+  "version": "1.0.1",
   "description": "AI-powered lead generation and automated sales platform",
   "main": "./out/main/index.js",
   "author": {
-    "name": "Lead Getter Enterprise"
+    "name": "Forvonix"
   },
   "license": "UNLICENSED",
   "private": true,

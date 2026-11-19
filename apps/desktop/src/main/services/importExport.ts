@@ -170,7 +170,7 @@ export function exportRows(input: { leadIds?: number[]; filter?: LeadFilter }) {
 export async function writeExport(file: string, rows: Record<string, unknown>[], columns: [string, string][] = EXPORT_COLUMNS): Promise<number> {
   if (file.toLowerCase().endsWith('.xlsx')) {
     const wb = new ExcelJS.Workbook()
-    wb.creator = 'Lead Getter Enterprise'
+    wb.creator = 'Lead Generation'
     const ws = wb.addWorksheet('Leads', { views: [{ state: 'frozen', ySplit: 1 }] })
     ws.columns = columns.map(([key, header]) => ({ header, key, width: Math.min(48, Math.max(12, header.length + 4)) }))
     ws.getRow(1).font = { bold: true }

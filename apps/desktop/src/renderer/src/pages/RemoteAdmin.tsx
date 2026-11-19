@@ -38,7 +38,7 @@ export function RemoteAdminSettings() {
         <div className="ag-hero-icon"><Smartphone size={18} /></div>
         <div className="grow">
           <div style={{ fontWeight: 650, fontSize: 15 }}>
-            {ra.enabled && ra.verified ? `Remote control is on — +${ra.number}` : ra.verified ? 'Remote control is off' : 'Control Lead Getter from your WhatsApp'}
+            {ra.enabled && ra.verified ? `Remote control is on — +${ra.number}` : ra.verified ? 'Remote control is off' : 'Control Lead Generation from your WhatsApp'}
           </div>
           <div className="faint" style={{ fontSize: 12.5 }}>
             Message the connected WhatsApp number from your own phone in plain words — English, Roman Urdu or Urdu. The AI understands and does it, and replies with the real result.

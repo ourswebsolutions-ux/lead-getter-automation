@@ -325,7 +325,7 @@ const handlers: Record<string, Handler> = {
   'remote:sendCode': () => remote.sendVerificationCode(),
   'remote:test': async () => {
     if (!getSettings().remoteAdmin.verified) throw new Error('Verify the admin number first.')
-    if (!(await remote.sendToAdmin('👋 Test from Lead Getter — remote control is connected.'))) throw new Error('Could not send. Is the WhatsApp account connected?')
+    if (!(await remote.sendToAdmin('👋 Test from Lead Generation — remote control is connected.'))) throw new Error('Could not send. Is the WhatsApp account connected?')
     return true
   },
   'knowledge:list': () => knowledge.listKnowledge(),

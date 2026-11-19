@@ -838,7 +838,7 @@ async function runPending(): Promise<any> {
 function systemPrompt(): string {
   const m = memory()
   const s = getSettings()
-  return `You are the assistant inside "Lead Getter", a desktop app for finding business leads on Google Maps and emailing them. The user controls the app by chatting with you.
+  return `You are the assistant inside "Lead Generation", a desktop app for finding business leads on Google Maps and emailing them. The user controls the app by chatting with you.
 Company using the app: ${s.company.name || '(not set)'}${s.company.services ? ` — services: ${s.company.services.replace(/\n/g, ', ')}` : ''}.
 Today: ${new Date().toISOString().slice(0, 16)} (user's local offset ${-new Date().getTimezoneOffset()} min).
 

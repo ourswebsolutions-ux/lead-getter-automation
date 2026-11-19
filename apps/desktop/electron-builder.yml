@@ -1,5 +1,5 @@
 appId: com.leadgetter.enterprise
-productName: Lead Getter Enterprise
+productName: Lead Generation
 directories:
   buildResources: build
   output: release/${version}
@@ -30,7 +30,10 @@ linux:
   icon: build/icons
   executableName: lead-getter-enterprise
   category: Office
-  maintainer: Lead Getter Enterprise
+  maintainer: Forvonix <forvonix.agency@gmail.com>
+  artifactName: Lead-Generation-${version}.${ext}
+deb:
+  artifactName: lead-generation_${version}_amd64.${ext}
 publish:
   provider: github
   owner: ourswebsolutions-ux
