@@ -51,8 +51,15 @@ export const CATALOG: Record<string, { about: string; calls: Record<string, Cata
     }
   },
   verification: {
-    about: 'Email verification: check one address, verify leads, stats.',
+    about: 'Email Verification tab: verify a pasted list of emails (results table), plus single checks and lead emails.',
     calls: {
+      'verifylist:add': { args: '[text with the emails exactly as the user gave them, {recheck?: boolean}]', desc: 'Add emails to the Email Verification list and start checking them (duplicates and non-emails are removed).' },
+      'verifylist:counts': { args: '[]', desc: 'Progress/results of the Email Verification list: total, verified, invalid, risky, unknown, remaining.' },
+      'verifylist:list': { args: '[{status?: "verified"|"invalid"|"risky"|"unknown"|"pending", search?, limit?}]', desc: 'Rows of the Email Verification list.' },
+      'verifylist:stop': { args: '[]', desc: 'Stop checking (finished results stay).' },
+      'verifylist:resume': { args: '[]', desc: 'Continue checking the rest.' },
+      'verifylist:deleteStatus': { args: '["invalid"|"unknown"|"risky"|"verified"]', desc: 'Delete all emails with that result from the list.', confirm: true },
+      'verifylist:clear': { args: '[]', desc: 'Clear the whole Email Verification list.', confirm: true },
       'verification:single': { args: '[email]', desc: 'Check one email now.' },
       'verification:leads': { args: '[leadIds | null, statuses?]', desc: 'Queue verification for leads (null = all unverified).' },
       'verification:stats': { args: '[]', desc: 'Counts by status.' },

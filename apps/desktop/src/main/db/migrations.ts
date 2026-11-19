@@ -588,5 +588,21 @@ ALTER TABLE whatsapp_accounts ADD COLUMN agent_enabled INTEGER NOT NULL DEFAULT 
     version: 9,
     name: 'inbound leads',
     sql: `INSERT OR IGNORE INTO lead_sources (id, label) VALUES ('inbound', 'Inbound (wrote to you)');`
+  },
+  {
+    version: 10,
+    name: 'email verification list',
+    sql: `
+CREATE TABLE verify_list (
+  id INTEGER PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  domain TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued','checking','verified','invalid','risky','unknown')),
+  detail TEXT,
+  checked_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX ix_verify_list_status ON verify_list(status, domain);
+`
   }
 ]

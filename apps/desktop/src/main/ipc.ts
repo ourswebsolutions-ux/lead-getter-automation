@@ -21,6 +21,8 @@ import * as assistant from './services/ai/assistant'
 import * as knowledge from './services/knowledge'
 import * as autoAgent from './services/ai/autoAgent'
 import * as remote from './services/remoteAdmin'
+import * as vlist from './services/verifyList'
+import { writeFile } from 'node:fs/promises'
 import * as analytics from './services/analytics'
 import * as gmaps from './services/maps'
 import * as license from './services/subscription'
@@ -42,7 +44,7 @@ const MAPS_EXPORT_COLUMNS: [string, string][] = [
 const LICENSED = new Set([
   'maps:start',
   'discovery:start', 'verification:single', 'verification:bulk', 'verification:file', 'verification:leads', 'verification:reverify',
-  'ai:research', 'ai:outreach', 'campaigns:start', 'campaigns:launchEmail', 'campaigns:resume', 'conversations:send', 'agent:approve'
+  'ai:research', 'ai:outreach', 'campaigns:start', 'campaigns:launchEmail', 'verifylist:add', 'verifylist:resume', 'campaigns:resume', 'conversations:send', 'agent:approve'
 ])
 
 const handlers: Record<string, Handler> = {
@@ -175,6 +177,34 @@ const handlers: Record<string, Handler> = {
   'discovery:start': (source: string, params) => discovery.startDiscovery(source, params),
   'discovery:history': (source?: string) => discovery.searchHistory(source),
   'discovery:countries': () => Object.keys(MAJOR_CITIES),
+
+  // ------------------------------------------------------------ email verification list (paste → verify → table)
+  'verifylist:parse': (text: string) => {
+    const r = vlist.parseEmails(text)
+    return { count: r.emails.length, duplicates: r.duplicates, badFormat: r.badFormat.slice(0, 50), badCount: r.badFormat.length }
+  },
+  'verifylist:add': (text: string, opts?: { recheck?: boolean }) => vlist.addAndVerify(text, opts),
+  'verifylist:list': (f) => vlist.listResults(f ?? {}),
+  'verifylist:counts': () => vlist.counts(),
+  'verifylist:ids': (f) => vlist.idsFor(f ?? {}),
+  'verifylist:recheck': (ids: number[]) => vlist.recheck(ids),
+  'verifylist:delete': (ids: number[]) => vlist.deleteIds(ids),
+  'verifylist:deleteStatus': (status: 'invalid' | 'unknown' | 'risky' | 'verified') => vlist.deleteByStatus(status),
+  'verifylist:clear': () => vlist.clearAll(),
+  'verifylist:stop': () => vlist.stop(),
+  'verifylist:resume': () => void vlist.start(),
+  'verifylist:export': async (scope: { kind: 'verified' | 'selected' | 'all' | 'filtered'; ids?: number[]; status?: string; search?: string; format: 'csv' | 'txt' }, _e?: any, win?: BrowserWindow) => {
+    const rows = vlist.exportRows(scope)
+    const name = { verified: 'verified-emails', selected: 'selected-emails', all: 'all-emails', filtered: 'emails' }[scope.kind]
+    const r = await dialog.showSaveDialog(win!, {
+      defaultPath: `${name}-${new Date().toISOString().slice(0, 10)}.${scope.format}`,
+      filters: [scope.format === 'txt' ? { name: 'Text (one email per line)', extensions: ['txt'] } : { name: 'CSV (Excel)', extensions: ['csv'] }]
+    })
+    if (r.canceled || !r.filePath) return null
+    await writeFile(r.filePath, scope.format === 'txt' ? vlist.toTxt(rows) : '\ufeff' + vlist.toCsv(rows), 'utf8')
+    logActivity('user', 'verifylist_exported', 'verification', rows.length)
+    return { file: r.filePath, count: rows.length }
+  },
 
   // ------------------------------------------------------------ verification
   'verification:single': async (address: string) => {

@@ -74,6 +74,18 @@ export function seedSampleData(): void {
   db().run("INSERT INTO agent_queue (conversation_id, kind, trigger_message_id, due_at, status) VALUES (?, 'reply', ?, datetime('now', '+23 minutes'), 'waiting')", wc.id, m1)
   const m2 = recordMessage(conv.id, { direction: 'in', author: 'contact', body: 'Do you also do the menu photos?' })
   db().run("INSERT INTO agent_queue (conversation_id, kind, trigger_message_id, due_at, status, reply, decision) VALUES (?, 'reply', ?, datetime('now'), 'sent', 'We don’t do photography ourselves, but we can add your photos and a clean menu layout. Do you have photos already?', ?)", conv.id, m2, JSON.stringify({ intent: 'question', language: 'English' }))
+  const vl = (email: string, status: string, detail: string | null, ago: number | null) =>
+    db().run("INSERT INTO verify_list (email, domain, status, detail, checked_at) VALUES (?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE datetime('now', ?) END)", email, email.split('@')[1], status, detail, ago, `-${ago ?? 0} minutes`)
+  vl('info@goldenbakery.pk', 'verified', 'the mail server confirmed the mailbox', 3)
+  vl('sales@primedealer.ae', 'verified', 'the mail server confirmed the mailbox', 3)
+  vl('hello@urbanclinic.co.uk', 'verified', 'domain verified: urbanclinic.co.uk has a working mail server', 4)
+  vl('contact@blueagency.com', 'risky', 'the mail server accepts every address', 4)
+  vl('owner.shop@gmail.com', 'risky', 'the mailbox could not be confirmed (gmail.com hides this from checks)', 5)
+  vl('admin@cedarboutique.test', 'invalid', 'the domain has no mail server', 5)
+  vl('zz-nobody@gmail.com', 'invalid', 'the mail server says the mailbox does not exist', 6)
+  vl('info@royalclinic.example', 'unknown', 'the mail server gave no clear answer', 6)
+  vl('team@summitfirm.com', 'checking', null, null)
+  vl('ceo@greenbakery.com', 'queued', null, null)
   const cid = createCampaign('whatsapp', 'Dubai restaurants — November', { accountIds: [] }, [{ kind: 'variant', body: 'Hi {contact_name}, I came across {business_name} in {city}…' }])
   addRecipients(cid, { filter: { cities: ['Dubai'] } })
 }

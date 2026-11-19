@@ -819,3 +819,47 @@ tbody tr:hover td {
     animation: none;
   }
 }
+
+/* ------------------------------------------------------------------ email verification list */
+.vl-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.vl-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid #2b2b30;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.02);
+  color: #7a7a80;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.vl-stat b {
+  font-size: 20px;
+  color: #f3f2f3;
+}
+.vl-stat:hover {
+  border-color: #4d4c4f;
+  background: #111112;
+}
+.vl-stat.on {
+  border-color: rgba(77, 166, 255, 0.35);
+  background: rgba(77, 166, 255, 0.05);
+}
+.vl-selbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  font-size: 12.5px;
+  border-top: 1px solid #2b2b30;
+  background: rgba(77, 166, 255, 0.05);
+  color: #b5b5b6;
+}

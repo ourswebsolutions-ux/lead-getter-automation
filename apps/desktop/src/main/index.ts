@@ -19,6 +19,7 @@ import { initSubscription } from './services/subscription'
 import { recoverSearches, shutdownMaps, startBackground as startMapsBackground } from './services/maps'
 import { setupTray, hideInsteadOfClose, applyStartWithComputer, startedHidden } from './core/background'
 import { startRemoteAdmin, announceShutdown } from './services/remoteAdmin'
+import { resumeOnStartup as resumeVerifyList } from './services/verifyList'
 import { setAppControls } from './services/ai/assistant'
 
 // Separate identity from any other "Lead Getter" install: own userData dir, own DB, own sessions.
@@ -208,6 +209,7 @@ app.whenReady().then(async () => {
   initSubscription()
   recoverSearches()
   startMapsBackground()
+  resumeVerifyList()
   void restoreSessions()
   void setupUpdates()
 
