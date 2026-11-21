@@ -163,7 +163,7 @@ footer::before { content: ''; position: absolute; top: -1px; left: 0; right: 0; 
 .fgrid { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 32px; }
 .fdesc { color: var(--metallic); font-size: 14px; margin-top: 14px; max-width: 320px; }
 footer h4 { font-family: var(--display); font-size: 12px; letter-spacing: .14em; color: var(--titanium); margin: 0 0 14px; font-weight: 600; text-transform: uppercase; }
-footer .fgrid > div > a:not(.logo) { display: block; color: var(--metallic); padding: 4px 0; font-size: 14px; transition: color .2s; }
+footer .fgrid > div > a:not(.logo) { display: block; color: var(--metallic); padding: 4px 0; font-size: 14px; transition: color .2s; overflow-wrap: anywhere; }
 footer .fgrid > div > a:not(.logo):hover { color: var(--white); }
 .copy { margin-top: 40px; padding-top: 22px; border-top: 1px solid var(--graphite); display: flex; justify-content: space-between; color: var(--metallic); font-size: 13px; flex-wrap: wrap; gap: 10px; }
 .wa-float { position: fixed; right: 22px; bottom: 22px; z-index: 40; width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(135deg, var(--wa), var(--wa2)); box-shadow: 0 10px 30px rgba(37, 211, 102, .35); transition: transform .2s; }

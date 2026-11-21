@@ -1,7 +1,7 @@
 /* Lead Generation — website behaviour. Edit SITE to change the repo or the WhatsApp number. */
 var SITE = {
   repo: 'ourswebsolutions-ux/lead-getter-automation',
-  whatsapp: '923245237429'
+  whatsapp: '923122382941'
 }
 
 ;(function () {
