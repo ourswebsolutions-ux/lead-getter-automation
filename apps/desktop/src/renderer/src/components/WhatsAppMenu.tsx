@@ -69,6 +69,8 @@ export function WhatsAppMenu() {
     : `WhatsApp · ${connected}/${list.length} connected`
 
   const connect = async (id: number) => {
+    // Close the accounts panel so it never covers the QR code (small screens).
+    setOpen(false)
     setQrFor(id)
     await run(`c${id}`, () => rpc('whatsapp:connect', id))
   }
@@ -184,7 +186,7 @@ export function WhatsAppMenu() {
       >
         <div className="col" style={{ alignItems: 'center', gap: 14, padding: '8px 0' }}>
           <div className="qr-box">
-            {qrImage ? <img src={qrImage} width={270} height={270} alt="WhatsApp QR code" /> : qrAccount?.status === 'connected' ? <StatusPill status="connected" /> : <span className="faint">Generating QR code…</span>}
+            {qrImage ? <img src={qrImage} width={270} height={270} style={{ width: 'min(270px, 52vh)', height: 'auto' }} alt="WhatsApp QR code" /> : qrAccount?.status === 'connected' ? <StatusPill status="connected" /> : <span className="faint">Generating QR code…</span>}
           </div>
           <div className="row">
             <StatusPill status={qrAccount?.status} />

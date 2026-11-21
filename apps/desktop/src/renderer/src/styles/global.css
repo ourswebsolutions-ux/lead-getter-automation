@@ -1921,8 +1921,8 @@ table.tbl {
   font-variant-numeric: tabular-nums;
 }
 .qr-box {
-  width: 280px;
-  height: 280px;
+  width: min(280px, calc(52vh + 10px));
+  height: min(280px, calc(52vh + 10px));
   border-radius: 14px;
   border: 1px solid var(--border);
   display: grid;
