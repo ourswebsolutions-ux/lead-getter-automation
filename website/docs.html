@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lead Generation Help Center</title>
+<meta name="description" content="Complete guide to every part of Lead Generation: install, activation, AI Assistant, AI Sales Agent, Google Maps Search, Email Verification, WhatsApp and email campaigns, Remote Admin, settings and troubleshooting." />
+<link rel="icon" href="assets/icon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;900&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/site.css" />
+<link rel="stylesheet" href="assets/docs.css" />
+</head>
+<body class="docs">
+<canvas id="fx" aria-hidden="true"></canvas>
+<div class="progress" id="progress"></div>
+
+<header>
+  <nav>
+    <div class="wrap">
+      <a class="logo" href="index.html"><img src="assets/icon.png" alt="" /><span class="chrome">Lead<small>GENERATION</small></span></a>
+      <div class="links" id="links">
+        <a href="index.html#features">Features</a>
+        <a href="index.html#download">Download</a>
+        <a href="docs.html" class="on">Help Center</a>
+        <a href="index.html#pricing">Pricing</a>
+        <a href="index.html#faq">FAQ</a>
+      </div>
+      <a class="btn btn-p nav-cta" href="index.html#download">Download</a>
+      <button class="menu-btn" id="menuBtn" aria-label="Menu">☰</button>
+    </div>
+  </nav>
+</header>
+
+<main id="top">
+  <div class="docs-hero wrap">
+    <span class="tag">Help Center</span>
+    <h1><span class="chrome">Every part of the app, explained</span></h1>
+    <p class="lead">Step-by-step guides for each screen of Lead Generation: what it is for, how to use it, what every option means, and answers to common questions.</p>
+    <div class="dsearch"><input id="q" type="search" placeholder="Search the guide — e.g. app password, QR code, reply delay, export" autocomplete="off" /><span id="qn"></span></div>
+  </div>
+
+  <div class="docs-grid wrap">
+    <aside class="toc" id="toc">
+      <details open>
+        <summary>Contents</summary>
+        <div class="toc-in">
+          <p>Getting started</p>
+          <a href="#overview">What the app does</a>
+          <a href="#install-windows">Install on Windows</a>
+          <a href="#install-linux">Install on Linux</a>
+          <a href="#activation">Trial & activation</a>
+          <a href="#first-setup">First-time setup (10 min)</a>
+          <a href="#updates">Automatic updates</a>
+          <p>Main</p>
+          <a href="#layout">Screen layout</a>
+          <a href="#assistant">AI Assistant</a>
+          <a href="#dashboard">Dashboard</a>
+          <a href="#conversations">Conversations</a>
+          <a href="#agent">AI Sales Agent</a>
+          <p>Find leads</p>
+          <a href="#maps">Google Maps Search</a>
+          <a href="#apollo">Apollo Leads</a>
+          <a href="#verification">Email Verification</a>
+          <p>Outreach</p>
+          <a href="#whatsapp">Connect WhatsApp</a>
+          <a href="#wa-campaigns">WhatsApp Campaigns</a>
+          <a href="#email">Email accounts</a>
+          <a href="#templates">Email Templates</a>
+          <a href="#email-campaigns">Email Campaigns</a>
+          <p>System</p>
+          <a href="#remote">WhatsApp Remote Admin</a>
+          <a href="#background">Background & start with computer</a>
+          <a href="#settings">Settings</a>
+          <p>Help</p>
+          <a href="#safety">Safe sending rules</a>
+          <a href="#troubleshooting">Troubleshooting</a>
+          <a href="#contact">Contact support</a>
+        </div>
+      </details>
+    </aside>
+
+    <article class="content" id="content">
+      <p class="none" id="none">Nothing in the guide matches that. Try another word, or <a class="link" data-wa href="#">ask us on WhatsApp</a>.</p>
+
+      <!-- ================= GETTING STARTED ================= -->
+      <section class="doc" id="overview">
+        <span class="tag">Getting started</span>
+        <h2>What Lead Generation does</h2>
+        <p>Lead Generation is a desktop app for Windows and Linux that finds new customers and talks to them for you:</p>
+        <ol class="flow">
+          <li><b>Find</b> businesses on Google Maps (or Apollo), with phone, website, rating and email.</li>
+          <li><b>Verify</b> their emails so you only write to addresses that really exist.</li>
+          <li><b>Reach out</b> with email and WhatsApp campaigns. The AI can write a personal message for each business.</li>
+          <li><b>Reply</b>: the AI Sales Agent answers customers on email and WhatsApp from what you teach it, and hands you anything sensitive.</li>
+          <li><b>Control</b> everything by chatting with the AI Assistant, in English or Roman Urdu, on the computer or from your own WhatsApp.</li>
+        </ol>
+        <div class="note"><b>Everything runs on your computer.</b> Your leads, messages and passwords are stored on your computer, not on our servers. Keep the computer on (the app can run in the background) while campaigns and the AI agent are working.</div>
+        <h3>What you need</h3>
+        <ul>
+          <li>A Windows 10/11 or Linux computer (64-bit) with internet.</li>
+          <li><b>Google Chrome</b> installed, which Google Maps Search uses.</li>
+          <li>An <b>AI key</b> for the AI features. A free Groq key is enough to start (see <a class="link" href="#agent-providers">AI providers</a>).</li>
+          <li>An email account to send from (Gmail works with an App Password) and, optionally, a WhatsApp number.</li>
+        </ul>
+      </section>
+
+      <section class="doc" id="install-windows">
+        <span class="tag">Getting started</span>
+        <h2>Install on Windows</h2>
+        <p>There are two Windows downloads on the <a class="link" href="index.html#download">Download</a> section. Both are the same app; pick one.</p>
+        <h3>Option A: single .exe (easiest)</h3>
+        <ol class="dsteps">
+          <li>Download <code>Lead-Generation-x.y.z-portable.exe</code>. If the browser asks, choose <b>Keep</b>.</li>
+          <li>Move it somewhere permanent, for example a folder <code>Documents\Lead Generation</code>. Don't run it straight from Downloads if you clean that folder.</li>
+          <li>Double-click it. If you see <b>“Windows protected your PC”</b>, click <b>More info → Run anyway</b>. This appears because the app is new and not yet code-signed; it is safe.</li>
+          <li>The first start takes a few seconds while it unpacks.</li>
+        </ol>
+        <h3>Option B: zip folder (starts faster)</h3>
+        <ol class="dsteps">
+          <li>Download <code>Lead-Generation-x.y.z-win-x64.zip</code>.</li>
+          <li>Right-click it → <b>Extract All</b> → choose a permanent folder (for example <code>C:\Users\you\Lead Generation</code>).</li>
+          <li>Open the folder and double-click <code>Lead Generation.exe</code>. Right-click it → <b>Send to → Desktop (create shortcut)</b> for a desktop icon.</li>
+        </ol>
+        <div class="tip">Keep the app in a folder you can write to (your user folders). Then <a class="link" href="#updates">automatic updates</a> can replace it. Avoid <code>C:\Program Files</code>.</div>
+      </section>
+
+      <section class="doc" id="install-linux">
+        <span class="tag">Getting started</span>
+        <h2>Install on Linux</h2>
+        <h3>AppImage (any Linux, recommended)</h3>
+        <ol class="dsteps">
+          <li>Download <code>Lead-Generation-x.y.z.AppImage</code> into a permanent folder (for example <code>~/Apps</code>).</li>
+          <li>Right-click → <b>Properties → Permissions → Allow executing file as program</b>. Or in a terminal: <code>chmod +x Lead-Generation-*.AppImage</code></li>
+          <li>Double-click it to start.</li>
+        </ol>
+        <h3>.deb (Ubuntu, Debian, Mint)</h3>
+        <ol class="dsteps">
+          <li>Download <code>lead-generation_x.y.z_amd64.deb</code>.</li>
+          <li>Double-click it and press <b>Install</b>, or run <code>sudo apt install ./lead-generation_*_amd64.deb</code></li>
+          <li>Open <b>Lead Generation</b> from your applications menu.</li>
+        </ol>
+        <div class="warn">Always open the app as your normal user, never with <code>sudo</code> or as <code>root</code>. Otherwise it uses a different, empty profile and your data seems to “disappear”.</div>
+        <div class="tip">The AppImage updates itself. The .deb only tells you when a new version is out, because installing a .deb needs your password.</div>
+      </section>
+
+      <section class="doc" id="activation">
+        <span class="tag">Getting started</span>
+        <h2>Free trial & activation</h2>
+        <p>The first time you open the app, a <b>2-day free trial</b> starts automatically with every feature. Your plan and days left are shown on the <b>plan button</b> at the top right.</p>
+        <h3>Buy and activate a plan</h3>
+        <ol class="dsteps">
+          <li>Click the <b>plan button</b> on the top bar → <b>All plans</b>.</li>
+          <li>Choose <b>Basic Monthly</b> (PKR 4,500 / 1 month), <b>Six-Month</b> (PKR 15,000) or <b>Lifetime</b> (PKR 50,000).</li>
+          <li>Enter your name and WhatsApp number (optional, so we can reach you) and send the request. We receive it instantly.</li>
+          <li>Pay as agreed with us on <a class="link" data-wa href="#">WhatsApp</a>. You will receive a <b>4-digit activation code</b>.</li>
+          <li>Back in the app: plan button → <b>I already have a code</b> → enter the code → <b>Verify & activate</b>. The code is valid for 3 days.</li>
+        </ol>
+        <div class="note">The activation belongs to <b>this computer</b> (its <b>Device ID</b> is shown under the plans). Reinstalling the app on the same computer keeps your plan. For another computer, ask us.</div>
+        <div class="qa">
+          <details><summary>The trial ended. Is my data gone?</summary><p>No. Everything stays. Searching, verifying, starting campaigns, sending replies and approving AI replies are locked until you activate a plan; viewing and exporting your data keeps working.</p></details>
+          <details><summary>My code says expired or invalid.</summary><p>Codes work for 3 days and only for the plan you requested. Click <b>Request a new code</b>, or message us on WhatsApp with your Device ID.</p></details>
+        </div>
+      </section>
+
+      <section class="doc" id="first-setup">
+        <span class="tag">Getting started</span>
+        <h2>First-time setup (about 10 minutes)</h2>
+        <p>Do these once, in this order. After that you can do almost everything by chatting with the <a class="link" href="#assistant">AI Assistant</a>.</p>
+        <ol class="dsteps big">
+          <li><b>Add an AI key.</b> <i>AI Sales Agent → AI providers</i>. Pick <b>Groq</b>, click <b>Get a key</b> (free at console.groq.com/keys), paste it, press <b>Test connection</b>, choose the model <code>openai/gpt-oss-120b</code>, save. <a class="link" href="#agent-providers">Details</a></li>
+          <li><b>Describe your business.</b> <i>AI Sales Agent → Knowledge → Business prompt</i>. Write, in your own words, what you sell, prices, hours, payment terms and how to talk to customers. Press <b>Save & fill everything</b>: the AI fills your company profile, signature, tone, currency and knowledge cards from it. <a class="link" href="#agent-knowledge">Details</a></li>
+          <li><b>Add your sending email.</b> <i>Email → Add account</i>: your email and password. For Gmail use an <b>App Password</b>. <a class="link" href="#email">Details</a></li>
+          <li><b>Connect WhatsApp</b> (optional). Top bar → <b>WhatsApp</b> → <b>Add WhatsApp account</b> → scan the QR code. <a class="link" href="#whatsapp">Details</a></li>
+          <li><b>Turn on the AI Sales Agent</b> (optional). <i>AI Sales Agent → Agent</i>: switch on the Email and/or WhatsApp agent and choose the reply delay. <a class="link" href="#agent-control">Details</a></li>
+          <li><b>Control from your phone</b> (optional). <i>Settings → WhatsApp Remote Admin</i>. <a class="link" href="#remote">Details</a></li>
+        </ol>
+      </section>
+
+      <section class="doc" id="updates">
+        <span class="tag">Getting started</span>
+        <h2>Automatic updates</h2>
+        <p>From version 1.0.3, the app updates itself, with no button to press.</p>
+        <ul>
+          <li>Every few hours it checks for a new version and downloads it in the background. Each download is checked against GitHub's SHA-256 checksum.</li>
+          <li>It installs only when nothing important is running (no search, verification, campaign send or background task) and you are not using the computer, or while it runs in the background.</li>
+          <li>It restarts by itself in a few seconds. If it was running in the background it comes back in the background. You get a notification “Updated to version x.y.z”.</li>
+        </ul>
+        <table class="t">
+          <tr><th>Download type</th><th>Updates</th></tr>
+          <tr><td>Windows single .exe</td><td>Automatic</td></tr>
+          <tr><td>Windows zip folder</td><td>Automatic</td></tr>
+          <tr><td>Linux AppImage</td><td>Automatic</td></tr>
+          <tr><td>Linux .deb</td><td>Notifies you; install the new .deb from the website</td></tr>
+        </table>
+        <div class="warn">Versions before 1.0.3 cannot update themselves. If you have 1.0.0–1.0.2, download the latest version once from the <a class="link" href="index.html#download">Download</a> section. Your data stays.</div>
+        <p class="muted">Your current version is shown in <i>Settings → Data & privacy → Version</i>.</p>
+      </section>
+
+      <!-- ================= MAIN ================= -->
+      <section class="doc" id="layout">
+        <span class="tag">Main</span>
+        <h2>Screen layout</h2>
+        <ul>
+          <li><b>Left menu</b>: every section, grouped into <i>Main</i>, <i>Find leads</i>, <i>Outreach</i> and <i>Settings</i>. The arrow collapses it to icons. The search box at the top filters the menu.</li>
+          <li><b>Bell</b> (next to the logo): replies and approvals that need you. Numbers on <i>Conversations</i> (unread) and <i>AI Sales Agent</i> (waiting approvals) show the same.</li>
+          <li><b>Top bar</b>: the <b>WhatsApp</b> button (accounts, QR codes, daily limits) and the <b>plan</b> button (trial days left, activation).</li>
+          <li><b>Background tasks</b>: long jobs (searches, email finding, verification) show live progress with <b>Pause</b>, <b>Resume</b> and <b>Cancel</b>. They continue if you switch pages and resume after a restart.</li>
+        </ul>
+      </section>
+
+      <section class="doc" id="assistant">
+        <span class="tag">Main</span>
+        <h2>AI Assistant</h2>
+        <p>The first page. Tell it what you want in plain English, Roman Urdu or Urdu. It does the work using the real features of the app and replies with the real result.</p>
+        <h3>Things you can ask</h3>
+        <div class="says">
+          <span class="say">Search shoe shops in Lahore and save them in Shoes</span>
+          <span class="say">Shoes category ki emails find kro</span>
+          <span class="say">Websites without emails dikhao</span>
+          <span class="say">Restaurants ke liye website offer ka email template likho</span>
+          <span class="say">Start an email campaign for Shoes</span>
+          <span class="say">Pending replies dikhao</span>
+          <span class="say">Campaign ki progress batao</span>
+          <span class="say">Reply delay 30 se 5 minute kr do</span>
+          <span class="say">Delete the Test category</span>
+          <span class="say">Add my email sales@mycompany.com with password …</span>
+        </div>
+        <h3>How it keeps you safe</h3>
+        <ul>
+          <li><b>Approval first</b>: sending campaigns, deleting data and other big actions show a summary card. Nothing happens until you press <b>Approve</b> or reply “yes”.</li>
+          <li><b>Passwords</b>: if you type an email password in chat, the app saves it straight to the account and hides it. It is never sent to the AI.</li>
+          <li><b>Stop</b> cancels the current request. <b>Clear</b> empties the chat; your data is not affected.</li>
+        </ul>
+        <div class="tip">You can change almost any setting by asking: reply delay, working hours, daily limits, opt-out words, and so on. Ask “what can you do?” for the full list.</div>
+        <div class="qa">
+          <details><summary>It says the AI limit was reached.</summary><p>Free AI keys (like Groq's) have a daily limit. Wait until it resets, add a second provider as <b>Fallback provider</b> in <i>AI Sales Agent → AI providers</i>, or use a paid key.</p></details>
+          <details><summary>It answered in English but I wrote Roman Urdu.</summary><p>It follows the language of your last message. Write the full sentence in Roman Urdu, for example “Lahore ki shoe shops search kro”.</p></details>
+        </div>
+      </section>
+
+      <section class="doc" id="dashboard">
+        <span class="tag">Main</span>
+        <h2>Dashboard</h2>
+        <p>Your pipeline at a glance. Every number comes from your real records.</p>
+        <ul>
+          <li><b>Top cards</b>: total leads, verified emails, interested prospects and messages sent.</li>
+          <li><b>System status</b>: connected WhatsApp and email accounts, running campaigns, the AI provider, and pending approvals. <b>Review now</b> opens the approvals.</li>
+          <li><b>Charts</b>: leads discovered over time, communication activity, pipeline (contact rate, conversion), lead sources, industries, email verification results and campaign performance.</li>
+          <li><b>Recent activity</b>: the latest actions across the app.</li>
+          <li>Switch the period with <b>7 days / 30 days / 90 days / 12 months</b>.</li>
+        </ul>
+      </section>
+
+      <section class="doc" id="conversations">
+        <span class="tag">Main</span>
+        <h2>Conversations</h2>
+        <p>One inbox for every email and WhatsApp chat with your leads and customers.</p>
+        <h3>List (left)</h3>
+        <ul>
+          <li>Search by name, number or email. Filters show <b>Needs approval</b>, <b>AI paused</b> and <b>Interested</b> chats.</li>
+          <li>A banner tells you when the AI will reply, for example “AI will reply in 4 min”.</li>
+        </ul>
+        <h3>Chat (middle)</h3>
+        <ul>
+          <li>Write and send your own message at the bottom. When you reply yourself, the AI's scheduled reply for that chat is cancelled.</li>
+          <li><b>Take over</b>: you handle this chat; the AI stops. <b>Resume AI</b> hands it back. <b>Pause AI</b> stops the AI for this chat only.</li>
+          <li><b>Reply now</b> / <b>Run AI reply now</b>: answer immediately instead of waiting for the delay.</li>
+          <li><b>AI draft</b>: let the AI write a reply that you can edit before sending.</li>
+        </ul>
+        <h3>Details (right)</h3>
+        <ul>
+          <li><b>AI conversation summary</b> and <b>Project requirements</b> captured from the chat.</li>
+          <li><b>Pricing approval</b>: <b>Prepare pricing suggestion</b> builds a price range from your <a class="link" href="#agent-pricing">pricing rules</a> for you to approve.</li>
+          <li><b>Business research</b> notes. Type your own notes and press <b>Save notes</b>.</li>
+          <li><b>Mark interested / not interested</b>, <b>Assign to me</b>, <b>Mark resolved</b> / <b>Reopen</b>.</li>
+        </ul>
+      </section>
+
+      <section class="doc" id="agent">
+        <span class="tag">Main</span>
+        <h2>AI Sales Agent</h2>
+        <p>Answers your email and WhatsApp customers like a trained team member, only from what you teach it and on your schedule. It has seven tabs:</p>
+
+        <h3 id="agent-control">Agent tab: on/off and timing</h3>
+        <dl class="fields">
+          <dt>Email agent / WhatsApp agent</dt><dd>Turn the agent on for each channel. It answers replies in your connected inboxes and WhatsApp numbers.</dd>
+          <dt>Auto reply</dt><dd>On: replies are sent without asking. Off: every reply waits in <b>Approvals</b> for you.</dd>
+          <dt>Ask me for sensitive messages</dt><dd>Complaints, payments, refunds and legal questions always wait for you, even with Auto reply on.</dd>
+          <dt>Reply delay</dt><dd>How long to wait before answering, like a person: immediately, 5 / 15 / 30 minutes, 1–2 hours or custom.</dd>
+          <dt>Random variation</dt><dd>Moves each reply time by up to this many minutes, so it never looks automatic.</dd>
+          <dt>Answer new email senders</dt><dd>Also reply to people who are not in your leads (new inquiries). The AI first checks that the email is really about your services; newsletters, notifications and automated mail are always ignored.</dd>
+          <dt>Mark WhatsApp messages read</dt><dd>Blue ticks appear when the agent answers.</dd>
+          <dt>Working hours</dt><dd>Only reply during your hours and days, in your time zone. Messages outside them are answered when you open.</dd>
+        </dl>
+        <p>Below, <b>Agent activity</b> lists every message with its status: <i>Waiting</i>, <i>Sent</i>, <i>Needs you</i>, <i>Failed</i>. <b>Reply now</b> skips the wait.</p>
+
+        <h3 id="agent-knowledge">Knowledge tab: what the agent knows</h3>
+        <p>The agent answers <b>only</b> from this. It never invents prices, discounts or promises.</p>
+        <ol class="dsteps">
+          <li><b>Business prompt</b>: one free-text box. Write as if explaining your business to a new employee: services, packages and prices, delivery times, payment terms, location, hours, how to talk to customers. Press <b>Use example</b> to see a sample.</li>
+          <li>Press <b>Save & fill everything</b>. The AI reads it and fills your company profile, sender name, signature, tone, language, currency and knowledge cards, but only with facts that are in your text. <b>Fill everything again</b> repeats it after you edit.</li>
+          <li>Optional: <b>Add info</b> cards by topic (Company, Services, Pricing, Policies, Contact, Hours, FAQs, Communication style, Other). Tick <b>Private</b> for notes the agent must never tell customers.</li>
+        </ol>
+        <div class="tip">Easiest way: tell the AI Assistant about your business in chat (“Hamari company websites banati hai, basic package 25,000…”). It saves it here for you.</div>
+        <div class="note">Long prompts use more AI tokens on every reply. Free AI plans have daily limits, so keep it to what customers actually ask about.</div>
+
+        <h3 id="agent-approvals">Approvals tab</h3>
+        <p>When a client asks about price, or a reply needs your judgement, it waits here. Each card shows the client's message, a suggested price range from your pricing rules, the scope of work and open questions. Choose <b>Approve & send</b>, <b>Edit response</b>, <b>Regenerate</b>, <b>Take over</b> or <b>Reject</b>.</p>
+
+        <h3 id="agent-providers">AI providers tab</h3>
+        <ol class="dsteps">
+          <li>Choose a provider: <b>Groq</b> (free tier, fast), <b>OpenAI</b>, <b>Anthropic Claude</b> or <b>Google Gemini</b>.</li>
+          <li><b>Get a key</b> opens the provider's key page. Paste the key into <b>API key</b>.</li>
+          <li><b>Test connection</b> checks the key and loads every model it can use. Choose a <b>Model</b>.</li>
+          <li>Set the <b>Default provider</b>. Optionally a <b>Fallback provider</b>, used only if the default fails (for example its daily limit is used up).</li>
+        </ol>
+        <table class="t">
+          <tr><th>Provider</th><th>Recommended model</th></tr>
+          <tr><td>Groq (free)</td><td><code>openai/gpt-oss-120b</code>, fallback <code>qwen/qwen3.8-27b</code></td></tr>
+          <tr><td>OpenAI</td><td><code>gpt-4.1</code> or <code>gpt-4.1-mini</code></td></tr>
+          <tr><td>Anthropic Claude</td><td><code>claude-sonnet-5-5</code> or <code>claude-opus-5-5</code></td></tr>
+          <tr><td>Google Gemini</td><td><code>gemini-2.5-flash</code> or <code>gemini-2.5-pro</code></td></tr>
+        </table>
+        <p class="muted">Keys are encrypted with your computer's keychain and only a masked preview is shown. If a model is retired by the provider, the app switches to the suggested replacement automatically.</p>
+
+        <h3 id="agent-company">Company & style tab</h3>
+        <p>Company name, website, <b>sender name</b> (how the agent introduces itself and signs off), about the company, services (one per line), email signature, <b>tone</b>, <b>default language</b>, outreach strategy and approved phrasing. These are filled automatically from your business prompt; edit anything and press <b>Save changes</b>.</p>
+
+        <h3 id="agent-pricing">Pricing rules tab</h3>
+        <p>Without rules, pricing questions are sent to you without figures. To let the AI suggest prices:</p>
+        <ol class="dsteps">
+          <li><b>Add service</b> (or <b>Start from a template</b>): name, price range, what's included, notes for the AI.</li>
+          <li>Set your <b>currency</b> and <b>complexity multipliers</b> (simple / standard / complex).</li>
+          <li>Add <b>standing pricing notes</b>, for example “50% upfront. Hosting billed separately.” Then <b>Save pricing</b>.</li>
+        </ol>
+        <p>The numbers always come from your rules. The AI only scopes the project and picks the matching service, and you approve before anything is sent.</p>
+
+        <h3 id="agent-usage">Usage & logs tab</h3>
+        <p>Tokens used per model, recent AI calls with purpose and response time. Useful for staying inside free-plan limits.</p>
+      </section>
+
+      <!-- ================= FIND LEADS ================= -->
+      <section class="doc" id="maps">
+        <span class="tag">Find leads</span>
+        <h2>Google Maps Search</h2>
+        <p>Finds businesses on Google Maps with phone, website, email and rating, and saves them as leads.</p>
+        <ol class="dsteps">
+          <li>Type <b>what and where</b>, for example <code>Shoe shops in Lahore</code> or <code>Dentists in Dubai Marina</code>. <b>Popular</b> suggestions help you start.</li>
+          <li>Choose or type a <b>Category</b> to save them in (for example “Shoes”). Categories are used later for campaigns.</li>
+          <li>Press <b>Search</b>. A Chrome window opens and businesses appear in the table as they are found. Leave Chrome open; if Google shows a “I'm not a robot” or consent page, complete it in that window.</li>
+          <li>Press <b>Stop</b> any time; everything found so far is kept.</li>
+        </ol>
+        <h3>Emails and verification</h3>
+        <ul>
+          <li><b>Find emails from websites</b>: visits each business website (contact pages too) and collects emails. Only businesses with a website can have an email.</li>
+          <li><b>Verify emails</b>: checks each email with its mail server. <span class="dot g"></span> green = exists, <span class="dot y"></span> yellow = risky, <span class="dot r"></span> red = does not exist.</li>
+        </ul>
+        <h3>Table, filters and export</h3>
+        <ul>
+          <li>Tabs: <b>All businesses</b>, <b>With website</b>, <b>Without website</b>. Businesses without a website are good prospects if you sell websites.</li>
+          <li>Filters: category, business type, rating (3+, 4+ stars), email yes/no. <b>Clear filters</b> resets them.</li>
+          <li>Click a business to see its details or <b>Open in Google Maps</b>.</li>
+          <li>Export: <b>Export all</b> or <b>Export selected</b>, as <b>CSV</b> or <b>Excel</b>. Search history and background tasks are on the right.</li>
+        </ul>
+        <div class="qa">
+          <details><summary>“Chrome did not start”.</summary><p>Install Google Chrome, close any Chrome window the app opened earlier, and try again.</p></details>
+          <details><summary>A business shows no email.</summary><p>Emails come from the business website. If it has no website, or the site shows no email, none can be found. Its phone number is still saved for WhatsApp.</p></details>
+          <details><summary>How many results can I get?</summary><p>Google Maps usually lists about 100–120 places for one search. For more, search smaller areas: “Shoe shops in DHA Lahore”, “… in Gulberg Lahore”.</p></details>
+        </div>
+      </section>
+
+      <section class="doc" id="apollo">
+        <span class="tag">Find leads</span>
+        <h2>Apollo Leads</h2>
+        <p>Search companies and decision-makers through Apollo.io's official API. You need your own Apollo account and API key.</p>
+        <ol class="dsteps">
+          <li>Paste your Apollo <b>master API key</b> (Apollo → Settings → API) in <b>Apollo API key</b>, or in <i>Settings → Integrations</i>.</li>
+          <li>Fill the search: keywords, job titles (Owner, CEO, Marketing Director…), industries, locations, company size, seniority, pages and results per page.</li>
+          <li>Optional: <b>Reveal work emails (enrichment)</b> finds emails for contacts without one. This uses Apollo credits; the app shows the maximum it can use before you start.</li>
+          <li>Press <b>Start search</b>. Results appear under <b>Contacts</b> and <b>Companies</b>.</li>
+        </ol>
+        <div class="note">Searches count against your Apollo plan's API limits.</div>
+      </section>
+
+      <section class="doc" id="verification">
+        <span class="tag">Find leads</span>
+        <h2>Email Verification</h2>
+        <p>Paste any list of emails, find out which ones really exist, then export the good ones. It uses the same checks as Google Maps Search.</p>
+        <ol class="dsteps">
+          <li>Click <b>Paste emails</b> and paste your list in any format: one per line, comma-separated, or “Name &lt;email&gt;”. Duplicates and anything that isn't an email are removed automatically.</li>
+          <li>Press <b>Verify</b>. Progress shows live. <b>Stop</b> pauses; <b>Continue</b> carries on. If you close the app, it resumes next time.</li>
+          <li>Filter by result, search, select rows, and <b>Export</b>.</li>
+        </ol>
+        <table class="t">
+          <tr><th>Result</th><th>Meaning</th><th>Send to it?</th></tr>
+          <tr><td><span class="dot g"></span> Verified</td><td>The address exists and can receive email.</td><td>Yes</td></tr>
+          <tr><td><span class="dot y"></span> Risky</td><td>The server accepts everything (catch-all) or would not confirm this mailbox. Gmail/Yahoo addresses that can't be confirmed show here.</td><td>With care</td></tr>
+          <tr><td><span class="dot r"></span> Invalid</td><td>The address or domain does not exist.</td><td>No</td></tr>
+          <tr><td><span class="dot n"></span> Unknown</td><td>The mail server gave no clear answer. Try <b>Check again</b> later.</td><td>With care</td></tr>
+        </table>
+        <h3>Export and clean up</h3>
+        <ul>
+          <li><b>Export</b>: Verified as CSV (opens in Excel) or TXT (one per line), Selected, “What you see now”, or All results.</li>
+          <li><b>Delete</b>: selected rows, all invalid, or <b>Clear all results</b>. <b>Check again</b> re-verifies selected emails.</li>
+          <li>Tick <b>Check again emails already in the list</b> when pasting, to re-verify them.</li>
+        </ul>
+        <div class="tip">Sending only to verified emails protects your email account from bounces and spam blocks.</div>
+      </section>
+
+      <!-- ================= OUTREACH ================= -->
+      <section class="doc" id="whatsapp">
+        <span class="tag">Outreach</span>
+        <h2>Connect WhatsApp</h2>
+        <p>The app links to WhatsApp the same way as WhatsApp Web. You can connect several numbers.</p>
+        <ol class="dsteps">
+          <li>Top bar → <b>WhatsApp</b> → <b>Add WhatsApp account</b>. Give it a name (for example “Sales number”) → <b>Add & scan</b>.</li>
+          <li>A QR code opens. On your phone: <b>WhatsApp → Settings → Linked devices → Link a device</b>, and scan it. The code refreshes automatically.</li>
+          <li>The status turns <b>Connected</b>. The session is saved, so you don't scan again after restarting.</li>
+        </ol>
+        <dl class="fields">
+          <dt>Daily limit</dt><dd>Maximum campaign messages per day from this number (default 40). Start low with new numbers.</dd>
+          <dt>Reconnect</dt><dd>If it shows disconnected, reconnects with the saved session.</dd>
+          <dt>Disconnect / Log out</dt><dd>Disconnect pauses it. <b>Log out</b> removes the session (you'll need to scan again).</dd>
+          <dt>Remove</dt><dd>Logs out and deletes the account. Conversation history is kept.</dd>
+        </dl>
+        <div class="warn">This is an unofficial WhatsApp Web connection. Keep daily limits low, message people with a real business reason, and respect opt-outs to avoid your number being banned.</div>
+      </section>
+
+      <section class="doc" id="wa-campaigns">
+        <span class="tag">Outreach</span>
+        <h2>WhatsApp Campaigns</h2>
+        <p>Send messages and follow-ups to your leads, at a safe pace.</p>
+        <ol class="dsteps">
+          <li><b>New campaign</b> → <b>Basics</b>: a campaign name.</li>
+          <li><b>Audience</b>: categories, countries, cities, tags. Option <b>Only leads never contacted</b>. The <b>Matches</b> count shows how many will receive it.</li>
+          <li><b>Messages</b>: write your first message. <b>Add message</b> creates variations; each recipient gets one, so wording varies. Insert variables like <code>{business_name}</code>, <code>{contact_name}</code>, <code>{city}</code>, <code>{category}</code>, <code>{website}</code>. Spintax <code>{Hi|Hello}</code> also works.</li>
+          <li><b>Follow-ups</b>: <b>Add follow-up</b> with a delay in days. Follow-ups stop automatically when the person replies or opts out.</li>
+          <li><b>AI personalisation</b> (optional): the AI reads each lead's website and rewrites your message for them. Add <b>Guidance</b>, for example “mention online ordering; under 70 words”. Uses AI tokens per recipient.</li>
+          <li><b>Pacing & safety</b>: delay between messages, campaign daily limit, <b>Randomise delay ±25%</b>, <b>Skip leads contacted by other campaigns</b>, and a <b>Sending window</b> (hours/days in your computer's time zone).</li>
+          <li><b>Send from</b>: pick which WhatsApp accounts to use. Check <b>Preview message</b>, then <b>Start now</b> or <b>Schedule</b>.</li>
+        </ol>
+        <p>On the campaign page: recipients with status (queued, sent, replied, failed/skipped), activity log, and <b>Pause</b>, <b>Stop</b> or <b>Delete</b>.</p>
+        <div class="note">Your computer must be on (the app can run in the background) for scheduled campaigns to send.</div>
+      </section>
+
+      <section class="doc" id="email">
+        <span class="tag">Outreach</span>
+        <h2>Email accounts</h2>
+        <p>The <b>Email</b> page holds your sending accounts and every email sent from them.</p>
+        <h3>Add an account</h3>
+        <ol class="dsteps">
+          <li><b>Add account</b> → enter your <b>email</b> and <b>password</b>. The mail server settings are found automatically and the login is tested.</li>
+          <li>If it can't find the server, fill <b>SMTP server</b> and <b>Port</b> yourself (for example <code>smtp.yourdomain.com</code>, port <code>465</code>). Ask your hosting provider if unsure.</li>
+          <li>Use <b>Send a test email</b> to check it works.</li>
+        </ol>
+        <h3>Gmail: use an App Password</h3>
+        <ol class="dsteps">
+          <li>Turn on <b>2-Step Verification</b> in your Google Account (Security).</li>
+          <li>Open <b>Google Account → Security → App passwords</b> (or search “App passwords”), create one named “Lead Generation”.</li>
+          <li>Copy the 16-letter password and paste it as the password in the app. Your normal Gmail password will not work.</li>
+        </ol>
+        <h3>Categories and rotation</h3>
+        <ul>
+          <li>Give an account one or more <b>categories</b>: leads in those categories are emailed from it.</li>
+          <li><b>Rotate accounts in a category</b>: when several accounts share a category, emails take turns between them, which spreads the load.</li>
+          <li>The <b>sent table</b> shows every email with status (sent, replied, sending now, failed). Search by email or business.</li>
+        </ul>
+        <div class="tip">The app also reads replies in these inboxes, so the AI Sales Agent can answer them. Mail sent from your own accounts is never treated as a customer.</div>
+      </section>
+
+      <section class="doc" id="templates">
+        <span class="tag">Outreach</span>
+        <h2>Email Templates</h2>
+        <p>Write once, use in any email campaign.</p>
+        <ul>
+          <li><b>New template</b>: name, <b>subject</b> and <b>body</b>. Insert variables: <code>{business_name}</code>, <code>{contact_name}</code>, <code>{city}</code>, <code>{category}</code>, <code>{website}</code>. The preview on the right shows how it looks.</li>
+          <li>Use <code>{option one|option two}</code> so each email picks one option and messages don't look identical.</li>
+          <li><b>Write with AI</b>: choose the category (which businesses) and optionally what to offer. The AI writes a natural, human-style template from your saved business info.</li>
+          <li><b>Duplicate</b> and <b>Delete</b> from the template's menu.</li>
+        </ul>
+      </section>
+
+      <section class="doc" id="email-campaigns">
+        <span class="tag">Outreach</span>
+        <h2>Email Campaigns</h2>
+        <p>Pick who to email; the AI writes the emails and the agent handles the replies.</p>
+        <ol class="dsteps">
+          <li><b>New email campaign</b> → choose the <b>categories</b> to email. If you have no leads yet, find some with Google Maps Search first.</li>
+          <li>Choose the message: a saved template, or <b>AI writes it for each business</b>. Optionally say <b>what to offer</b>, for example “website development”.</li>
+          <li><b>Send from</b>: one or more email accounts (they rotate). <b>Add an email account</b> if you have none.</li>
+          <li>Set <b>Send daily between</b> (hours) and the gap between emails (1–15 min).</li>
+          <li><b>Start now</b> or <b>Schedule</b> a date and time. Optional campaign name.</li>
+        </ol>
+        <p>Leads in the chosen categories with a <b>verified or risky</b> email are added; invalid emails are skipped. If you pick several templates, they take turns. Each lead gets one email; the conversation continues from their reply. Replies appear in <a class="link" href="#conversations">Conversations</a> and are answered by the <a class="link" href="#agent">AI Sales Agent</a> if it is on.</p>
+        <div class="tip">For the best inbox placement, email only verified addresses, keep a few minutes between emails, and add 2–3 sending accounts per category.</div>
+      </section>
+
+      <!-- ================= SYSTEM ================= -->
+      <section class="doc" id="remote">
+        <span class="tag">System</span>
+        <h2>WhatsApp Remote Admin</h2>
+        <p>Control the app from your own phone. Message the connected WhatsApp number in plain words (English, Roman Urdu or Urdu); the AI understands, does it, and replies with the real result.</p>
+        <h3>Set up</h3>
+        <ol class="dsteps">
+          <li>Connect a WhatsApp account first (top bar → WhatsApp).</li>
+          <li><i>Settings → WhatsApp Remote Admin</i>: enter <b>your own number</b> with country code, digits only (for example <code>923001234567</code>).</li>
+          <li>Choose <b>Listen on this WhatsApp account</b> (or any connected account).</li>
+          <li>Press <b>Send code</b>. You receive a 6-digit code on WhatsApp; reply with it from your phone. The number shows <b>Verified</b>.</li>
+          <li>Switch Remote control <b>on</b>. <b>Send test</b> sends you a test message.</li>
+        </ol>
+        <h3>What you can send</h3>
+        <div class="says">
+          <span class="say">system status</span>
+          <span class="say">aaj kitni emails gayi?</span>
+          <span class="say">Search bakeries in Karachi</span>
+          <span class="say">pending replies bhejo</span>
+          <span class="say">campaign pause kr do</span>
+          <span class="say">pc lock kr do</span>
+          <span class="say">computer band kr do</span>
+          <span class="say">restart computer</span>
+        </div>
+        <h3>Lock and unlock the computer</h3>
+        <ul>
+          <li><b>Lock</b>, <b>power off</b> and <b>restart</b> work on Windows and Linux. Power off, restart and sleep ask you to confirm first.</li>
+          <li><b>Unlock</b> (Linux): send “unlock”, then your computer password as the next message (or “unlock yourpassword”). The computer checks it itself. It is never shown to the AI and never saved, and is hidden in the history. After 3 wrong tries, unlock is blocked for a while.</li>
+          <li>Windows does not allow programs to unlock the lock screen, so on Windows unlock at the computer.</li>
+        </ul>
+        <h3>Notifications</h3>
+        <p>Choose what the app tells you on WhatsApp: new replies, interested leads, pricing approvals, campaign updates, finished searches, email events and errors. <b>Command history</b> shows what you sent and the results.</p>
+        <div class="warn">Only the verified admin number can give commands. The admin number can only be changed on the computer, in Settings, never by chat.</div>
+      </section>
+
+      <section class="doc" id="background">
+        <span class="tag">System</span>
+        <h2>Background & start with computer</h2>
+        <dl class="fields">
+          <dt>Keep running when the window is closed</dt><dd>On by default. Closing the window hides it; campaigns, the AI agent and WhatsApp control keep working. Use the <b>tray icon</b> to reopen or to <b>Quit</b>.</dd>
+          <dt>Start with the computer</dt><dd>Starts the app in the background when you log in, so everything works even if you forget to open it.</dd>
+        </dl>
+        <p>Both are in <i>Settings → WhatsApp Remote Admin → Background</i>. To really close the app, right-click the tray icon → <b>Quit</b>.</p>
+      </section>
+
+      <section class="doc" id="settings">
+        <span class="tag">System</span>
+        <h2>Settings</h2>
+        <h3>General</h3>
+        <ul>
+          <li><b>3D background animation</b>: turn it off on slow computers.</li>
+          <li><b>Desktop notifications</b>: replies, approvals needed and finished tasks while the app is in the background.</li>
+        </ul>
+        <h3>WhatsApp Remote Admin</h3>
+        <p>See <a class="link" href="#remote">WhatsApp Remote Admin</a> and <a class="link" href="#background">Background</a>.</p>
+        <h3>Integrations</h3>
+        <ul>
+          <li><b>Apollo.io</b> API key (for Apollo Leads).</li>
+          <li><b>Google Places API</b> and <b>Google Programmable Search</b> keys (optional extra discovery sources). <b>Get credentials</b> opens the right page; <b>Test connection</b> checks them.</li>
+        </ul>
+        <h3>Verification & crawling</h3>
+        <ul>
+          <li><b>Verify new emails automatically</b>, concurrent checks (keep low), re-verify after N days, timeout per email.</li>
+          <li><b>Reacher</b> URL and key (optional, an extra verification service).</li>
+          <li>Website crawler: <b>Respect robots.txt</b> (recommended), max pages per site, sites in parallel, delay between pages.</li>
+        </ul>
+        <h3>Compliance</h3>
+        <ul>
+          <li><b>Email footer</b> added to every email. Replies containing “unsubscribe” are suppressed automatically.</li>
+          <li><b>WhatsApp opt-out line</b> added to AI-written first messages.</li>
+          <li><b>Opt-out keywords</b> (English, Roman Urdu and Urdu, for example “stop”, “unsubscribe”, “not interested”, “msg mat bhejo”, “band karo”). A matching reply opts the person out, pauses the AI and stops every campaign to them, on email and WhatsApp.</li>
+          <li><b>Do-not-contact list</b>: everyone who opted out.</li>
+        </ul>
+        <h3>Data & privacy</h3>
+        <ul>
+          <li><b>Version</b>, <b>Data folder</b> and <b>Open logs folder</b> (send us the logs if something goes wrong).</li>
+          <li><b>Delete all data…</b> removes leads, emails, verification results, conversations, campaigns and job history from this computer. Accounts, settings and API keys are kept. This cannot be undone, so export first.</li>
+        </ul>
+      </section>
+
+      <!-- ================= HELP ================= -->
+      <section class="doc" id="safety">
+        <span class="tag">Help</span>
+        <h2>Safe sending rules</h2>
+        <ul>
+          <li><b>Email</b>: send only to verified emails; start with 20–40 emails per account per day and increase slowly; keep 2+ minutes between emails; use 2–3 accounts per category.</li>
+          <li><b>WhatsApp</b>: new numbers start at 20–40 messages a day; use message variations; keep the randomised delay on; only contact businesses with a real reason.</li>
+          <li>Always honour opt-outs. The app does it for you, across email and WhatsApp.</li>
+          <li>You are responsible for having a lawful reason to contact each lead and for following WhatsApp's, your email provider's and local anti-spam rules.</li>
+        </ul>
+      </section>
+
+      <section class="doc" id="troubleshooting">
+        <span class="tag">Help</span>
+        <h2>Troubleshooting</h2>
+        <div class="qa">
+          <details><summary>Windows says “Windows protected your PC”.</summary><p>Click <b>More info → Run anyway</b>. It appears because the app is new and not code-signed yet.</p></details>
+          <details><summary>Gmail: “Invalid login” or “Username and Password not accepted”.</summary><p>Gmail needs an <b>App Password</b>, not your normal password. See <a class="link" href="#email">Email accounts → Gmail</a>. Remove spaces if you copied it with spaces.</p></details>
+          <details><summary>Email login times out.</summary><p>Check your internet and that your network doesn't block ports 465/587/993. Try another network (for example mobile hotspot) to test.</p></details>
+          <details><summary>The WhatsApp QR code won't scan.</summary><p>Make the window bigger or full-screen so the whole code is visible, keep the phone 20–30 cm away, and wait for a fresh code (it refreshes automatically). On the phone, use WhatsApp → Linked devices → Link a device.</p></details>
+          <details><summary>WhatsApp shows disconnected.</summary><p>Click <b>Reconnect</b>. If it still fails, <b>Log out</b> and scan the QR code again. Make sure the phone has internet.</p></details>
+          <details><summary>Google Maps Search finds nothing or stops.</summary><p>Look at the Chrome window the app opened: complete any “I'm not a robot” or consent page, then search again. Make sure Google Chrome is installed and up to date.</p></details>
+          <details><summary>The AI doesn't answer, or says “limit reached”.</summary><p>Check <i>AI Sales Agent → AI providers → Test connection</i>. Free keys have daily limits. Add a fallback provider or wait for the reset.</p></details>
+          <details><summary>The AI agent didn't reply to a customer.</summary><p>Check: the agent is on for that channel; working hours; the reply delay hasn't passed yet (see <i>Agent activity</i>); the chat isn't in <b>Take over</b> or <b>AI paused</b>; the message wasn't a sensitive one waiting in <b>Approvals</b>; the person didn't opt out.</p></details>
+          <details><summary>The app closed but campaigns still send.</summary><p>That's the background mode. Quit fully from the tray icon → Quit, or turn off “Keep running when the window is closed”.</p></details>
+          <details><summary>My data disappeared on Linux.</summary><p>You probably opened the app as root/sudo. Close it and open it as your normal user.</p></details>
+          <details><summary>Something else went wrong.</summary><p><i>Settings → Data & privacy → Open logs folder</i>, and send us the newest log file on WhatsApp with a screenshot.</p></details>
+        </div>
+      </section>
+
+      <section class="doc" id="contact">
+        <span class="tag">Help</span>
+        <h2>Contact support</h2>
+        <p>Still have a question? We're happy to help with setup, activation or anything in this guide.</p>
+        <div class="contact">
+          <a class="btn btn-hot" data-wa href="#">WhatsApp +92 312 2382941</a>
+          <a class="btn btn-s" href="mailto:forvonix.agency@gmail.com">forvonix.agency@gmail.com</a>
+        </div>
+      </section>
+    </article>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="copy"><span>© <span id="year">2026</span> Lead Generation</span><span><a href="index.html">Home</a> · <a href="index.html#download">Download</a> · Version <span data-version>1.0.3</span></span></div>
+  </div>
+</footer>
+
+<a class="wa-float" data-wa href="#" aria-label="Chat on WhatsApp">
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.6 14.2c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.2-.7-2.7-1.1-4.4-3.9-4.6-4.1-.1-.2-1.1-1.5-1.1-2.8 0-1.3.7-2 1-2.3.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 1.9c.1.2.1.4 0 .5l-.3.5-.4.4c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.7-.1l.9-1.1c.2-.3.4-.2.7-.1l1.8.9c.3.1.5.2.5.3.1.2.1.7-.1 1.3z"/></svg>
+</a>
+
+<script src="assets/site.js"></script>
+<script src="assets/docs.js"></script>
+</body>
+</html>

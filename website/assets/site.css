@@ -200,3 +200,8 @@ footer .fgrid > div > a:not(.logo):hover { color: var(--white); }
   html { scroll-behavior: auto; }
   .badge i { animation: none; }
 }
+
+.more { text-align: center; margin-top: 34px; }
+.more .btn { height: 54px; }
+.link { color: var(--blue); }
+.link:hover { color: var(--cyan); text-decoration: underline; }
