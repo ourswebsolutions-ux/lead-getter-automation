@@ -16,18 +16,18 @@ var SITE = {
     a.rel = 'noopener'
   })
   document.querySelectorAll('[data-buy]').forEach(function (a) {
-    a.href = waLink('Hello, I would like to buy the Lead Generation ' + a.dataset.buy + ' plan. My Activation ID is: ')
+    a.href = waLink('Hello, I would like to buy the Lead Generation ' + a.dataset.buy + ' plan. My Device ID is: ')
     a.target = '_blank'
     a.rel = 'noopener'
   })
-  document.getElementById('year').textContent = new Date().getFullYear()
+  if (document.getElementById('year')) document.getElementById('year').textContent = new Date().getFullYear()
 
   // Mobile menu
   var links = document.getElementById('links')
-  document.getElementById('menuBtn').onclick = function () {
+  if (links && document.getElementById('menuBtn')) document.getElementById('menuBtn').onclick = function () {
     links.classList.toggle('open')
   }
-  links.querySelectorAll('a').forEach(function (a) {
+  if (links) links.querySelectorAll('a').forEach(function (a) {
     a.onclick = function () {
       links.classList.remove('open')
     }
@@ -59,6 +59,7 @@ var SITE = {
     if (guideLinux) guideLinux.click()
   }
   function pointHero() {
+    if (!heroDl || !heroOs) return
     var sel = os === 'win' ? '[data-asset="portable.exe"]' : os === 'linux' ? '[data-asset=".AppImage"]' : null
     var a = sel && document.querySelector(sel)
     if (a) {
