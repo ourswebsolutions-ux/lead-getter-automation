@@ -1,11 +1,12 @@
-import { app, BrowserWindow, safeStorage, shell, Notification, nativeTheme, session } from 'electron'
+import { app, BrowserWindow, safeStorage, shell, Notification, nativeTheme, session, powerMonitor } from 'electron'
 import { join } from 'node:path'
 import { existsSync, readFileSync, writeFileSync, chmodSync } from 'node:fs'
 import { randomBytes } from 'node:crypto'
 import { openDatabase, db } from './db'
 import { initLogger, logger } from './core/logger'
 import { bus } from './core/events'
-import { startJobRunner, stopJobRunner } from './core/jobs'
+import { startJobRunner, stopJobRunner, runningJobCount } from './core/jobs'
+import { startUpdater } from './core/updater'
 import { getSettings } from './core/settings'
 import { setCipher, aesCipher, type Cipher } from './security/secrets'
 import { registerIpc } from './ipc'
@@ -16,17 +17,17 @@ import { registerWhatsApp, restoreSessions, shutdownWhatsApp } from './services/
 import { registerEmail, startInboxPolling, stopInboxPolling } from './services/email'
 import { startCampaignEngine, stopCampaignEngine } from './services/campaigns'
 import { initSubscription } from './services/subscription'
-import { recoverSearches, shutdownMaps, startBackground as startMapsBackground } from './services/maps'
+import { recoverSearches, shutdownMaps, startBackground as startMapsBackground, activeSearch } from './services/maps'
 import { setupTray, hideInsteadOfClose, applyStartWithComputer, startedHidden } from './core/background'
 import { startRemoteAdmin, announceShutdown } from './services/remoteAdmin'
-import { resumeOnStartup as resumeVerifyList } from './services/verifyList'
+import { resumeOnStartup as resumeVerifyList, isRunning as verifyListRunning } from './services/verifyList'
 import { setAppControls } from './services/ai/assistant'
 
 // Separate identity from any other "Lead Getter" install: own userData dir, own DB, own sessions.
 // Internal identity stays 'Lead Getter Enterprise': the OS keychain (safeStorage) keys saved passwords
 // and API keys by this name, so changing it would lose them. Users see "Lead Generation" (window, tray, menus).
 app.setName('Lead Getter Enterprise')
-app.setPath('userData', !app.isPackaged && process.env.LGE_USER_DATA ? process.env.LGE_USER_DATA : join(app.getPath('appData'), 'lead-getter-enterprise'))
+app.setPath('userData', process.env.LGE_USER_DATA ? process.env.LGE_USER_DATA : join(app.getPath('appData'), 'lead-getter-enterprise'))
 
 const log = logger('main')
 let mainWindow: BrowserWindow | null = null
@@ -140,21 +141,6 @@ function forwardEvents(): void {
   })
 }
 
-async function setupUpdates(): Promise<void> {
-  if (!app.isPackaged || process.env.LGE_DISABLE_UPDATES) return
-  try {
-    const mod: any = await import('electron-updater')
-    const autoUpdater = mod.autoUpdater ?? mod.default?.autoUpdater
-    if (!autoUpdater) throw new Error('electron-updater not available')
-    autoUpdater.autoDownload = false
-    autoUpdater.on('update-available', (i: { version: string }) => bus.publish('update:available', { version: i.version }))
-    autoUpdater.on('error', (e: Error) => log.warn(`Update check failed: ${e.message}`))
-    await autoUpdater.checkForUpdates()
-  } catch (e: any) {
-    log.warn(`Updater unavailable: ${e.message}`)
-  }
-}
-
 app.whenReady().then(async () => {
   initLogger(app.getPath('logs'))
   log.info(`Starting v${app.getVersion()} (${process.platform}/${process.arch})`)
@@ -213,7 +199,16 @@ app.whenReady().then(async () => {
   startMapsBackground()
   resumeVerifyList()
   void restoreSessions()
-  void setupUpdates()
+  startUpdater({
+    busy: () =>
+      runningJobCount() > 0 ||
+      !!activeSearch() ||
+      verifyListRunning() ||
+      (db().get<{ n: number }>("SELECT COUNT(*) n FROM campaign_recipients WHERE status = 'sending'")?.n ?? 0) > 0,
+    windowHidden: () => !mainWindow || !mainWindow.isVisible() || mainWindow.isMinimized(),
+    userIdleSeconds: () => powerMonitor.getSystemIdleTime(),
+    shutdown
+  })
 
   if (!app.isPackaged && process.env.LGE_CAPTURE_DIR) {
     const dev = await import('./devCapture')
@@ -244,13 +239,12 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin' && !getSettings().background.keepRunning) app.quit()
 })
 
-app.on('before-quit', async (e) => {
-  if (quitting) return
-  e.preventDefault()
+/** Clean shutdown, used on quit and before an automatic update restart. */
+async function shutdown(updateTo?: string): Promise<void> {
   quitting = true
-  log.info('Shutting down…')
+  log.info(updateTo ? `Restarting to update to ${updateTo}…` : 'Shutting down…')
   try {
-    await announceShutdown()
+    await announceShutdown(updateTo)
     stopCampaignEngine()
     stopInboxPolling()
     await stopJobRunner()
@@ -261,6 +255,12 @@ app.on('before-quit', async (e) => {
   } catch (err) {
     log.error('Error during shutdown', err)
   }
+}
+
+app.on('before-quit', async (e) => {
+  if (quitting) return
+  e.preventDefault()
+  await shutdown()
   app.exit(0)
 })
 

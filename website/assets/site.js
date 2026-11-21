@@ -94,7 +94,7 @@ var SITE = {
       pointHero()
     })
     .catch(function () {
-      /* offline or rate-limited: the built-in v1.0.2 links stay */
+      /* offline or rate-limited: the built-in v1.0.3 links stay */
     })
 
   // Reveal on scroll + top progress bar

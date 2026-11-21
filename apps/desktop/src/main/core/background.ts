@@ -63,7 +63,9 @@ export function applyStartWithComputer(): void {
         return
       }
       // Packaged: the app binary. Development: electron + the project folder (needs a build: npm run build).
-      const exec = app.isPackaged ? `"${process.execPath}" --background` : `"${process.execPath}" "${app.getAppPath()}" --background`
+      // AppImage: process.execPath is a temporary mount that disappears; use the .AppImage file itself.
+      const bin = process.env.APPIMAGE || process.execPath
+      const exec = app.isPackaged ? `"${bin}" --background` : `"${process.execPath}" "${app.getAppPath()}" --background`
       mkdirSync(join(homedir(), '.config', 'autostart'), { recursive: true })
       writeFileSync(
         file,

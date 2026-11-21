@@ -242,10 +242,13 @@ export function startRemoteAdmin(): void {
 }
 
 /** Best-effort goodbye before the app quits (so the admin knows commands won't work). */
-export async function announceShutdown(): Promise<void> {
+export async function announceShutdown(updateTo?: string): Promise<void> {
   const s = cfg()
   if (!s.enabled || !s.verified) return
-  await Promise.race([sendToAdmin('🔴 Lead Generation is turning off. Remote commands will not work until it is started again on the computer.'), new Promise((r) => setTimeout(r, 6000))])
+  const text = updateTo
+    ? `🔄 Lead Generation is updating to version ${updateTo}. It restarts by itself in about a minute.`
+    : '🔴 Lead Generation is turning off. Remote commands will not work until it is started again on the computer.'
+  await Promise.race([sendToAdmin(text), new Promise((r) => setTimeout(r, 6000))])
 }
 
 export function remoteStatus() {

@@ -34,6 +34,8 @@ interface HandlerDef {
 const handlers = new Map<string, HandlerDef>()
 const running = new Map<string, { type: string; ctl: AbortController; reason?: JobInterrupted['reason'] }>()
 let timer: NodeJS.Timeout | null = null
+/** Number of jobs executing right now. */
+export const runningJobCount = (): number => running.size
 let stopping = false
 
 export function registerJob<P, S = unknown>(
