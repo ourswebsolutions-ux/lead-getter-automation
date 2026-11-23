@@ -339,3 +339,40 @@ export function updateConversation(id: number, patch: { status?: 'open' | 'resol
   if (patch.notes !== undefined && conv.lead_id) db().run('UPDATE leads SET notes = ? WHERE id = ?', patch.notes, conv.lead_id)
   bus.publish('conversation:updated', { id })
 }
+
+/** Deletes whole chats from this app (messages, approvals and scheduled AI replies go with them).
+ *  Nothing is deleted on WhatsApp or in the mailbox; opt-outs stay on the do-not-contact list. */
+export function deleteConversations(ids: number[]): number {
+  let n = 0
+  for (const id of ids) {
+    cancelForConversation(id, 'Conversation deleted')
+    n += Number(db().run('DELETE FROM conversations WHERE id = ?', id).changes)
+  }
+  if (n) {
+    logActivity('user', 'conversations.delete', 'conversation', ids.join(','), { count: n })
+    bus.publish('conversation:deleted', { ids })
+  }
+  return n
+}
+
+/** Deletes messages from a chat in this app only (the other person still has them). */
+export function deleteMessages(convId: number, messageIds: number[]): number {
+  let n = 0
+  for (const mid of messageIds) n += Number(db().run('DELETE FROM messages WHERE id = ? AND conversation_id = ?', mid, convId).changes)
+  if (n) {
+    const last = db().get<{ body: string; created_at: string }>('SELECT body, created_at FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1', convId)
+    db().run('UPDATE conversations SET last_message_preview = ?, last_message_at = COALESCE(?, last_message_at) WHERE id = ?', last ? last.body.slice(0, 140) : null, last?.created_at ?? null, convId)
+    bus.publish('conversation:updated', { id: convId })
+  }
+  return n
+}
+
+/** Empties a chat but keeps the contact, its settings and notes. */
+export function clearConversation(convId: number): number {
+  cancelForConversation(convId, 'Chat cleared')
+  const n = Number(db().run('DELETE FROM messages WHERE conversation_id = ?', convId).changes)
+  db().run("DELETE FROM approvals WHERE conversation_id = ? AND status IN ('pending','needs_pricing_config')", convId)
+  db().run('UPDATE conversations SET last_message_preview = NULL, unread = 0, summary = NULL WHERE id = ?', convId)
+  bus.publish('conversation:updated', { id: convId })
+  return n
+}

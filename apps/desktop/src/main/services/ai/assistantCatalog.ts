@@ -47,7 +47,14 @@ export const CATALOG: Record<string, { about: string; calls: Record<string, Cata
       'maps:bgStatus': { args: '[]', desc: 'Email finder / verifier status.' },
       'maps:setOptions': { args: '[{autoFindEmails?: boolean, verifyEmails?: boolean}]', desc: 'Turn the background email finder / verification on or off.' },
       'maps:stop': { args: '[]', desc: 'Stop the running search.' },
-      'maps:delete': { args: '[resultIds]', desc: 'Delete search results (and their leads).', confirm: true }
+      'maps:delete': { args: '[resultIds]', desc: 'Delete businesses completely (with their emails and campaign entries).', confirm: true },
+      'maps:get': { args: '[resultId]', desc: 'One business with all its emails.' },
+      'maps:add': { args: '[{business_name, phone?, website?, address?, city?, country?, business_category?, category_id?, email?, notes?}]', desc: 'Add a business by hand to the Maps table.' },
+      'maps:update': { args: '[resultId, {business_name?, phone?, website?, address?, city?, country?, business_category?, category_id?, contact_name?, notes?}]', desc: 'Edit a business.' },
+      'maps:moveToCategory': { args: '[resultIds, categoryId]', desc: 'Put businesses into a campaign category.' },
+      'maps:deleteSearches': { args: '[searchIds]', desc: 'Remove past searches from history (businesses are kept).' },
+      'jobs:clearFinished': { args: '[]', desc: 'Clear finished background tasks from the list.' },
+      'discovery:clearHistory': { args: '["apollo"?]', desc: 'Clear Apollo search history (leads are kept).' }
     }
   },
   verification: {
@@ -75,6 +82,7 @@ export const CATALOG: Record<string, { about: string; calls: Record<string, Cata
       'smtp:accountCategories': { args: '[]', desc: 'Which categories each account sends to.' },
       'smtp:setCategories': { args: '[accountId, categoryIds]', desc: 'Replace an account’s categories.' },
       'smtp:delete': { args: '[accountId]', desc: 'Remove an account.', confirm: true },
+      'smtp:patch': { args: '[accountId, {from_name?, reply_to?, daily_limit?, enabled?}]', desc: 'Change sender name, reply-to, daily limit, or pause/resume sending from an account.' },
       'email:stats': { args: '[]', desc: 'Sent / replied / failed / sending counts.' },
       'email:activity': { args: '[{status?: "sent"|"replied"|"failed", search?, limit?}]', desc: 'Sent emails with status.' },
       'settings:update': { args: '[{email: {rotateAccounts: boolean}}]', desc: 'Rotate between accounts of a category on/off.' }
@@ -99,7 +107,9 @@ export const CATALOG: Record<string, { about: string; calls: Record<string, Cata
       'campaigns:resume': { args: '[campaignId]', desc: 'Resume.' },
       'campaigns:update': { args: '[campaignId, {name?, config?: {dailyLimit?, delayMinutes?, sendWindow?: {start,end,days}}}]', desc: 'Rename or change pacing.' },
       'campaigns:stop': { args: '[campaignId]', desc: 'Stop for good.', confirm: true },
-      'campaigns:delete': { args: '[campaignId]', desc: 'Delete (must be stopped).', confirm: true }
+      'campaigns:delete': { args: '[campaignId]', desc: 'Delete (must be stopped).', confirm: true },
+      'campaigns:rename': { args: '[campaignId, name]', desc: 'Rename a campaign.' },
+      'campaigns:removeRecipients': { args: '[campaignId, recipientIds]', desc: 'Remove queued recipients from a campaign.', confirm: true }
     }
   },
   whatsapp: {
@@ -123,7 +133,10 @@ export const CATALOG: Record<string, { about: string; calls: Record<string, Cata
       'conversations:setAiMode': { args: '[conversationId, "auto"|"paused"|"human"]', desc: 'Let AI answer, pause AI for this customer, or take over (human).' },
       'conversations:update': { args: '[conversationId, {status?: "open"|"resolved", interest?: "interested"|"not_interested"|"unknown", notes?}]', desc: 'Update status / interest.' },
       'agent:draft': { args: '[conversationId]', desc: 'AI drafts a reply (not sent).' },
-      'conversations:send': { args: '[conversationId, body, subject?]', desc: 'Send a message to the lead.', confirm: true }
+      'conversations:send': { args: '[conversationId, body, subject?]', desc: 'Send a message to the lead.', confirm: true },
+      'conversations:delete': { args: '[conversationIds]', desc: 'Delete chats from this app (nothing is deleted on WhatsApp or in the mailbox).', confirm: true },
+      'conversations:clear': { args: '[conversationId]', desc: 'Remove all messages of one chat, keep the contact.', confirm: true },
+      'conversations:deleteMessages': { args: '[conversationId, messageIds]', desc: 'Delete single messages from this app.', confirm: true }
     }
   },
   ai_agent: {

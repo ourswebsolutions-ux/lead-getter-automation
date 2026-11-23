@@ -203,6 +203,12 @@ export function addRecipients(id: number, input: { leadIds?: number[]; filter?: 
   return { added, skipped: ids.length - added, reasons }
 }
 
+export function renameCampaign(id: number, name: string): void {
+  if (!name?.trim()) throw new Error('Campaign name is required')
+  db().run('UPDATE campaigns SET name = ? WHERE id = ?', name.trim(), id)
+  bus.publish('campaign:updated', { id })
+}
+
 export function removeRecipients(id: number, recipientIds: number[]): void {
   for (const r of recipientIds) db().run("DELETE FROM campaign_recipients WHERE id = ? AND campaign_id = ? AND status = 'queued'", r, id)
   bus.publish('campaign:updated', { id })

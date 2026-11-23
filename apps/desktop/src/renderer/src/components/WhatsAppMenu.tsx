@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { MessageCircle, Plus, QrCode, Power, RefreshCw, Trash2, LogOut, ChevronDown, ShieldAlert } from 'lucide-react'
+import { MessageCircle, Plus, QrCode, Power, RefreshCw, Trash2, LogOut, ChevronDown, ShieldAlert, Pencil, Check, X } from 'lucide-react'
 import { rpc, useAction, useEvent, useQuery } from '../lib/rpc'
 import { fmtRelative } from '../lib/format'
 import { Button, Input, Modal, StatusPill, confirmDialog } from './ui'
@@ -27,6 +27,7 @@ export function WhatsAppMenu() {
   const { data: accounts, reload } = useQuery<Account[]>('whatsapp:list', [], { events: ['whatsapp:*'], poll: 15000 })
   const [open, setOpen] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [renaming, setRenaming] = useState<{ id: number; label: string } | null>(null)
   const [label, setLabel] = useState('')
   const [qrFor, setQrFor] = useState<number | null>(null)
   const [qr, setQr] = useState<Record<number, string>>({})
@@ -68,6 +69,14 @@ export function WhatsAppMenu() {
     : list.length === 1 ? (list[0].status === 'connected' ? `WhatsApp · +${list[0].phone ?? ''}` : 'WhatsApp · not connected')
     : `WhatsApp · ${connected}/${list.length} connected`
 
+  const saveName = async () => {
+    if (!renaming) return
+    const r = await run('rn', () => rpc('whatsapp:update', renaming.id, { label: renaming.label }), { success: 'Name saved' })
+    if (r !== undefined) {
+      setRenaming(null)
+      await reload()
+    }
+  }
   const connect = async (id: number) => {
     // Close the accounts panel so it never covers the QR code (small screens).
     setOpen(false)
@@ -106,7 +115,18 @@ export function WhatsAppMenu() {
                 <div className="row">
                   <span className="dot" style={{ background: a.status === 'connected' ? 'var(--green)' : a.status === 'error' || a.status === 'logged_out' ? 'var(--red)' : 'var(--amber)' }} />
                   <div className="grow" style={{ minWidth: 0 }}>
-                    <div className="truncate" style={{ fontWeight: 600, fontSize: 13 }}>{a.label}</div>
+                    {renaming?.id === a.id ? (
+                      <form className="row" style={{ gap: 4 }} onSubmit={(e) => { e.preventDefault(); void saveName() }}>
+                        <Input autoFocus value={renaming.label} onChange={(e) => setRenaming({ ...renaming, label: e.target.value })} style={{ height: 26, fontSize: 12.5 }} onKeyDown={(e) => e.key === 'Escape' && setRenaming(null)} />
+                        <Button type="submit" size="sm" variant="primary" iconOnly icon={<Check size={12} />} title="Save name" />
+                        <Button type="button" size="sm" variant="ghost" iconOnly icon={<X size={12} />} title="Cancel" onClick={() => setRenaming(null)} />
+                      </form>
+                    ) : (
+                      <div className="row" style={{ gap: 4 }}>
+                        <span className="truncate" style={{ fontWeight: 600, fontSize: 13 }}>{a.label}</span>
+                        <button className="icon-link" title="Rename" onClick={() => setRenaming({ id: a.id, label: a.label })}><Pencil size={11} /></button>
+                      </div>
+                    )}
                     <div className="faint truncate" style={{ fontSize: 11.5 }}>
                       {a.phone ? `+${a.phone}` : 'No number linked'} · {a.sent_today}/{a.daily_limit} today{a.last_activity_at ? ` · active ${fmtRelative(a.last_activity_at)}` : ''}
                     </div>

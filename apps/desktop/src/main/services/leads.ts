@@ -428,10 +428,16 @@ export function listCategories() {
 }
 export function createCategory(name: string, color?: string): number {
   if (!name.trim()) throw new Error('Category name is required')
-  return db().run('INSERT INTO lead_categories (name, color) VALUES (?, ?)', name.trim(), color ?? '#8B8D98').lastInsertRowid
+  if (db().get("SELECT 1 FROM lead_categories WHERE name = ? COLLATE NOCASE", name.trim())) throw new Error(`A category called “${name.trim()}” already exists`)
+  const id = Number(db().run('INSERT INTO lead_categories (name, color) VALUES (?, ?)', name.trim(), color ?? '#8B8D98').lastInsertRowid)
+  bus.publish('leads:changed', { categories: true })
+  return id
 }
 export function renameCategory(id: number, name: string, color?: string): void {
+  if (!name.trim()) throw new Error('Category name is required')
+  if (db().get('SELECT 1 FROM lead_categories WHERE name = ? COLLATE NOCASE AND id != ?', name.trim(), id)) throw new Error(`A category called “${name.trim()}” already exists`)
   db().run('UPDATE lead_categories SET name = ?, color = COALESCE(?, color) WHERE id = ?', name.trim(), color ?? null, id)
+  bus.publish('leads:changed', { categories: true })
 }
 export function deleteCategory(id: number): void {
   const other = db().get<{ id: number }>("SELECT id FROM lead_categories WHERE name = 'Other'")!
@@ -440,6 +446,7 @@ export function deleteCategory(id: number): void {
     db().run('UPDATE leads SET category_id = ? WHERE category_id = ?', other.id, id)
     db().run('DELETE FROM lead_categories WHERE id = ?', id)
   })
+  bus.publish('leads:changed', { categories: true })
 }
 export function listTags(): { tag: string; n: number }[] {
   return db().all('SELECT tag, COUNT(*) n FROM lead_tags GROUP BY tag ORDER BY n DESC')

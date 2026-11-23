@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { Pause, Play, X, ScrollText, CheckCircle2, XCircle, Clock } from 'lucide-react'
+import { Pause, Play, X, ScrollText, CheckCircle2, XCircle, Clock, Trash2 } from 'lucide-react'
 import { rpc, useQuery, useAction } from '../lib/rpc'
 import { fmtRelative } from '../lib/format'
-import { Button, Card, EmptyState, Modal, Progress, StatusPill } from './ui'
+import { Button, Card, EmptyState, Modal, Progress, StatusPill, confirmDialog } from './ui'
 import type { Job } from '@shared/types'
 
 export function JobsPanel({ types, title = 'Background tasks', emptyText = 'Tasks you start appear here with live progress.', limit = 8, onResult }: {
@@ -16,8 +16,18 @@ export function JobsPanel({ types, title = 'Background tasks', emptyText = 'Task
   const [logsFor, setLogsFor] = useState<Job | null>(null)
   const { data: logs } = useQuery<any[]>('jobs:logs', [logsFor?.id], { enabled: !!logsFor, events: ['job:*'] })
   const { run } = useAction()
+  const finished = (jobs ?? []).filter((j) => ['completed', 'failed', 'cancelled'].includes(j.status)).length
+  const clearFinished = async () => {
+    if (await confirmDialog({ title: 'Clear finished tasks?', body: 'Completed, failed and cancelled tasks are removed from this list. Their results (businesses, emails) are kept.', confirm: 'Clear' }))
+      run('clr', () => rpc('jobs:clearFinished', types), { success: (n: number) => `${n} task${n === 1 ? '' : 's'} cleared` })
+  }
   return (
-    <Card title={title} sub="Runs in the background — you can leave this page." tight>
+    <Card
+      title={title}
+      sub="Runs in the background — you can leave this page."
+      tight
+      actions={finished > 0 ? <Button size="sm" variant="ghost" icon={<Trash2 size={13} />} onClick={clearFinished}>Clear finished</Button> : undefined}
+    >
       {loading && !jobs ? (
         <div style={{ padding: 18 }} className="col gap-12">
           <div className="skel" style={{ height: 14 }} />
@@ -57,6 +67,7 @@ export function JobsPanel({ types, title = 'Background tasks', emptyText = 'Task
                 {(j.status === 'paused' || j.status === 'failed') && <Button size="sm" variant="ghost" iconOnly icon={<Play size={14} />} title="Resume" onClick={() => run('r', () => rpc('jobs:resume', j.id))} />}
                 {active && <Button size="sm" variant="ghost" iconOnly icon={<X size={14} />} title="Cancel" onClick={() => run('c', () => rpc('jobs:cancel', j.id))} />}
                 <Button size="sm" variant="ghost" iconOnly icon={<ScrollText size={14} />} title="Logs" onClick={() => setLogsFor(j)} />
+                {!active && <Button size="sm" variant="ghost" iconOnly icon={<Trash2 size={13} />} title="Remove from list" onClick={() => run('d', () => rpc('jobs:delete', [j.id]))} />}
               </div>
             </div>
           )

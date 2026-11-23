@@ -287,7 +287,10 @@ export function createAccount(label: string, dailyLimit = 40): number {
 }
 
 export function updateAccount(id: number, patch: { label?: string; daily_limit?: number; enabled?: boolean }) {
-  if (patch.label !== undefined) db().run('UPDATE whatsapp_accounts SET label = ? WHERE id = ?', patch.label, id)
+  if (patch.label !== undefined) {
+    if (!patch.label.trim()) throw new Error('Account name is required')
+    db().run('UPDATE whatsapp_accounts SET label = ? WHERE id = ?', patch.label.trim(), id)
+  }
   if (patch.daily_limit !== undefined) db().run('UPDATE whatsapp_accounts SET daily_limit = ? WHERE id = ?', Math.max(1, Math.min(500, patch.daily_limit)), id)
   if (patch.enabled !== undefined) db().run('UPDATE whatsapp_accounts SET enabled = ? WHERE id = ?', patch.enabled ? 1 : 0, id)
 }

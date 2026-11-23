@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, Mail, Send, Trash2, KeyRound, ChevronDown, ChevronUp, Loader2, Shuffle, MoreHorizontal, Tag, Search, Check } from 'lucide-react'
+import { Plus, Mail, Send, Trash2, KeyRound, ChevronDown, ChevronUp, Loader2, Shuffle, MoreHorizontal, Tag, Search, Check, Pencil } from 'lucide-react'
 import { rpc, useAction, useQuery } from '../../lib/rpc'
 import { useNav } from '../../lib/nav'
 import { fmtNum, fmtRelative } from '../../lib/format'
@@ -25,6 +25,7 @@ export function EmailAccountsPage() {
   const [adding, setAdding] = useState(false)
   const [testFor, setTestFor] = useState<any>(null)
   const [pwFor, setPwFor] = useState<any>(null)
+  const [editFor, setEditFor] = useState<any>(null)
   const { run } = useAction()
   useEffect(() => setOffset(0), [filter, search])
   useEffect(() => {
@@ -76,6 +77,7 @@ export function EmailAccountsPage() {
                         align="right"
                         trigger={(o) => <Button size="sm" variant="ghost" iconOnly icon={<MoreHorizontal size={14} />} onClick={o} />}
                         items={[
+                          { label: 'Edit details', icon: <Pencil size={14} />, onClick: () => setEditFor(a) },
                           { label: 'Send test email', icon: <Send size={14} />, onClick: () => setTestFor(a) },
                           { label: 'Change password', icon: <KeyRound size={14} />, onClick: () => setPwFor(a) },
                           { sep: true },
@@ -91,7 +93,7 @@ export function EmailAccountsPage() {
                         ]}
                       />
                     </div>
-                    <div className="faint" style={{ fontSize: 11.5, margin: '2px 0 8px 16px' }}>{a.sent_today}/{a.daily_limit} sent today</div>
+                    <div className="faint" style={{ fontSize: 11.5, margin: '2px 0 8px 16px' }}>{a.from_name ? `${a.from_name} · ` : ''}{a.sent_today}/{a.daily_limit} sent today{!a.enabled && <span style={{ color: 'var(--amber)' }}> · Paused</span>}</div>
                     <div className="row wrap gap-4" style={{ marginLeft: 16 }}>
                       {(cats?.[a.id] ?? []).map((id) => (
                         <span key={id} className="chip static" style={{ fontSize: 11.5 }}>{catName(id)}</span>
@@ -141,6 +143,7 @@ export function EmailAccountsPage() {
       </div>
       {adding && <AddAccountModal onClose={() => setAdding(false)} onAdded={reload} />}
       {testFor && <TestModal account={testFor} onClose={() => setTestFor(null)} />}
+      {editFor && <EditAccountModal account={editFor} onClose={() => setEditFor(null)} onSaved={reload} />}
       {pwFor && <PasswordModal account={pwFor} onClose={() => setPwFor(null)} onSaved={reload} />}
     </div>
   )
@@ -263,6 +266,37 @@ function AddAccountModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
         )}
         <button type="submit" hidden />
       </form>
+    </Modal>
+  )
+}
+
+function EditAccountModal({ account, onClose, onSaved }: { account: any; onClose: () => void; onSaved: () => void }) {
+  const [f, setF] = useState({ from_name: account.from_name ?? '', reply_to: account.reply_to ?? '', daily_limit: String(account.daily_limit ?? 100), enabled: !!account.enabled })
+  const { busy, run } = useAction()
+  const save = () =>
+    run('s', () => rpc('smtp:patch', account.id, { from_name: f.from_name, reply_to: f.reply_to, daily_limit: Number(f.daily_limit), enabled: f.enabled }), { success: 'Account saved' }).then((r) => {
+      if (r !== undefined) {
+        onSaved()
+        onClose()
+      }
+    })
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Edit account"
+      desc={account.from_email}
+      footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" loading={!!busy} onClick={save}>Save</Button></>}
+    >
+      <div className="col gap-12">
+        <Field label="Sender name" hint="Shown to people as who the email is from, e.g. Sara from Automas"><Input value={f.from_name} onChange={(e) => setF({ ...f, from_name: e.target.value })} /></Field>
+        <Field label="Reply-to (optional)" hint="Replies go to this address instead"><Input value={f.reply_to} onChange={(e) => setF({ ...f, reply_to: e.target.value })} placeholder={account.from_email} /></Field>
+        <Field label="Daily limit" hint="Maximum campaign emails per day from this account"><Input type="number" min={1} max={2000} value={f.daily_limit} onChange={(e) => setF({ ...f, daily_limit: e.target.value })} style={{ width: 120 }} /></Field>
+        <label className="row" style={{ gap: 10, cursor: 'pointer', fontSize: 13 }}>
+          <Switch on={f.enabled} onChange={(v) => setF({ ...f, enabled: v })} />
+          <span>Send from this account <span className="faint">— off pauses campaigns on it; replies are still read</span></span>
+        </label>
+      </div>
     </Modal>
   )
 }

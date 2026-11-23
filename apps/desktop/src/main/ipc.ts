@@ -2,7 +2,7 @@ import { ipcMain, dialog, shell, BrowserWindow, app, nativeTheme } from 'electro
 import { db } from './db'
 import { logger } from './core/logger'
 import { getSettings, updateSettings } from './core/settings'
-import { listJobs, getJob, jobLogs, pauseJob, resumeJob, cancelJob } from './core/jobs'
+import { listJobs, getJob, jobLogs, pauseJob, resumeJob, cancelJob, deleteJobs, clearFinishedJobs } from './core/jobs'
 import { secrets } from './security/secrets'
 import { logActivity } from './core/activity'
 import * as leads from './services/leads'
@@ -24,6 +24,7 @@ import * as remote from './services/remoteAdmin'
 import * as vlist from './services/verifyList'
 import { writeFile } from 'node:fs/promises'
 import * as analytics from './services/analytics'
+import * as mapsManage from './services/maps/manage'
 import * as gmaps from './services/maps'
 import * as license from './services/subscription'
 import { testPlacesKey, MAJOR_CITIES } from './services/sources/googleMaps'
@@ -92,6 +93,8 @@ const handlers: Record<string, Handler> = {
   'jobs:pause': (id: string) => pauseJob(id),
   'jobs:resume': (id: string) => resumeJob(id),
   'jobs:cancel': (id: string) => cancelJob(id),
+  'jobs:delete': (ids: string[]) => deleteJobs(ids),
+  'jobs:clearFinished': (types?: string[]) => clearFinishedJobs(types),
 
   // ------------------------------------------------------------ leads
   'leads:list': (filter, opts) => leads.listLeads(filter, opts),
@@ -157,7 +160,16 @@ const handlers: Record<string, Handler> = {
   'maps:searches': () => gmaps.recentSearches(),
   'maps:results': (filter, opts) => gmaps.listResults(filter ?? {}, opts),
   'maps:categories': () => gmaps.resultCategories(),
-  'maps:delete': (ids: number[]) => gmaps.deleteResults(ids),
+  'maps:delete': (ids: number[]) => mapsManage.deleteBusinesses(ids),
+  'maps:add': (input) => {
+    const r = mapsManage.addBusiness(input)
+    if (getSettings().verification.autoVerify && r.newEmailIds.length) verification.queueVerification(r.newEmailIds)
+    return r
+  },
+  'maps:get': (id: number) => mapsManage.getBusiness(id),
+  'maps:update': (id: number, patch) => mapsManage.updateBusiness(id, patch),
+  'maps:moveToCategory': (ids: number[], categoryId: number) => mapsManage.moveToCategory(ids, categoryId),
+  'maps:deleteSearches': (ids: number[]) => mapsManage.deleteSearches(ids),
   'maps:bgStatus': () => gmaps.backgroundStatus(),
   'maps:setOptions': (patch) => gmaps.setMapsOptions(patch),
   'maps:export': async (input: { filter?: any; ids?: number[]; format: 'csv' | 'xlsx' }, _e?: any, win?: BrowserWindow) => {
@@ -176,6 +188,8 @@ const handlers: Record<string, Handler> = {
   // ------------------------------------------------------------ discovery
   'discovery:start': (source: string, params) => discovery.startDiscovery(source, params),
   'discovery:history': (source?: string) => discovery.searchHistory(source),
+  'discovery:deleteHistory': (ids: number[]) => discovery.deleteSearchHistory(ids),
+  'discovery:clearHistory': (source?: string) => discovery.clearSearchHistory(source),
   'discovery:countries': () => Object.keys(MAJOR_CITIES),
 
   // ------------------------------------------------------------ email verification list (paste → verify → table)
@@ -271,6 +285,9 @@ const handlers: Record<string, Handler> = {
   'conversations:setAiMode': (id: number, mode) => convs.setAiMode(id, mode),
   'conversations:update': (id: number, patch) => convs.updateConversation(id, patch),
   'conversations:markRead': (id: number) => convs.markRead(id),
+  'conversations:delete': (ids: number[]) => convs.deleteConversations(ids),
+  'conversations:deleteMessages': (id: number, messageIds: number[]) => convs.deleteMessages(id, messageIds),
+  'conversations:clear': (id: number) => convs.clearConversation(id),
   'conversations:start': (leadId: number, channel: 'whatsapp' | 'email', accountId: number | null) => {
     const lead = leads.getLead(leadId)
     if (!lead) throw new Error('Lead not found')
@@ -298,6 +315,7 @@ const handlers: Record<string, Handler> = {
     return r
   },
   'smtp:update': (id: number, a) => email.updateSmtpAccount(id, a),
+  'smtp:patch': (id: number, p) => email.patchSmtpAccount(id, p),
   'smtp:delete': (id: number) => email.deleteSmtpAccount(id),
   'smtp:test': (id: number) => email.testSmtp(id),
   'smtp:sendTest': (id: number, to: string, subject: string, body: string, isHtml: boolean) => email.sendTestEmail(id, to, subject, body, isHtml),
@@ -315,6 +333,7 @@ const handlers: Record<string, Handler> = {
   'campaigns:delete': (id: number) => campaigns.deleteCampaign(id),
   'campaigns:addRecipients': (id: number, input) => campaigns.addRecipients(id, input),
   'campaigns:removeRecipients': (id: number, ids: number[]) => campaigns.removeRecipients(id, ids),
+  'campaigns:rename': (id: number, name: string) => campaigns.renameCampaign(id, name),
   'campaigns:recipients': (id: number, opts) => campaigns.listRecipients(id, opts),
   'campaigns:start': (id: number, scheduledAt?: string | null) => campaigns.startCampaign(id, scheduledAt),
   'campaigns:pause': (id: number) => campaigns.pauseCampaign(id),
@@ -323,6 +342,7 @@ const handlers: Record<string, Handler> = {
   'campaigns:preview': (id: number, leadId: number, step?: number) => campaigns.previewMessage(id, leadId, step),
   'remote:status': () => remote.remoteStatus(),
   'remote:sendCode': () => remote.sendVerificationCode(),
+  'remote:clearHistory': () => remote.clearRemoteHistory(),
   'remote:test': async () => {
     if (!getSettings().remoteAdmin.verified) throw new Error('Verify the admin number first.')
     if (!(await remote.sendToAdmin('👋 Test from Lead Generation — remote control is connected.'))) throw new Error('Could not send. Is the WhatsApp account connected?')

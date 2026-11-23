@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
-import { KeyRound, ArrowRight, History } from 'lucide-react'
-import { useQuery } from '../../lib/rpc'
+import { KeyRound, ArrowRight, History, Trash2 } from 'lucide-react'
+import { rpc, useQuery } from '../../lib/rpc'
 import { useNav } from '../../lib/nav'
 import { fmtRelative, fmtNum } from '../../lib/format'
-import { Button, Callout, Card, PageHeader, StatusPill } from '../../components/ui'
+import { Button, Callout, Card, PageHeader, StatusPill, confirmDialog } from '../../components/ui'
 import { JobsPanel } from '../../components/JobsPanel'
 
 export function DiscoveryLayout({ title, desc, eyebrow = 'Discovery', form, jobTypes, source, children }: {
@@ -28,10 +28,16 @@ export function DiscoveryLayout({ title, desc, eyebrow = 'Discovery', form, jobT
 }
 
 export function SearchHistory({ source }: { source: string }) {
-  const { data } = useQuery<any[]>('discovery:history', [source], { events: ['job:finished'] })
+  const { data, reload } = useQuery<any[]>('discovery:history', [source], { events: ['job:finished', 'discovery:*'] })
   if (!data?.length) return null
+  const clearAll = async () => {
+    if (await confirmDialog({ title: 'Clear search history?', body: 'Only the list of past searches is removed. The leads they found are kept.', confirm: 'Clear' })) {
+      await rpc('discovery:clearHistory', source)
+      reload()
+    }
+  }
   return (
-    <Card title={<span className="row"><History size={14} /> Search history</span>} tight>
+    <Card title={<span className="row"><History size={14} /> Search history</span>} tight actions={<Button size="sm" variant="ghost" icon={<Trash2 size={13} />} onClick={clearAll}>Clear</Button>}>
       {data.slice(0, 8).map((h) => {
         let p: any = {}
         try {
@@ -55,6 +61,7 @@ export function SearchHistory({ source }: { source: string }) {
               <span style={{ color: 'var(--green)' }}>{fmtNum(h.new_count)} new</span>
             </div>
             {h.job_status && h.job_status !== 'completed' && <StatusPill status={h.job_status} />}
+            <Button size="sm" variant="ghost" iconOnly icon={<Trash2 size={13} />} title="Remove from history" onClick={() => rpc('discovery:deleteHistory', [h.id]).then(reload)} />
           </div>
         )
       })}

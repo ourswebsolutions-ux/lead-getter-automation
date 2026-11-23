@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Search, Square, MapPin, Tag, SlidersHorizontal, Download, Loader2, AlertTriangle, CheckCircle2, XCircle, Star, ExternalLink, X, Globe, ChevronDown } from 'lucide-react'
+import { Search, Square, MapPin, Tag, SlidersHorizontal, Download, Loader2, AlertTriangle, CheckCircle2, XCircle, Star, ExternalLink, X, Globe, ChevronDown, Plus, Trash2, FolderInput, Tags } from 'lucide-react'
 import { rpc, useAction, useEvent, useQuery } from '../../lib/rpc'
 import { fmtNum } from '../../lib/format'
-import { Button, Checkbox, DataTable, EmptyState, Menu, Pager, Segmented, Select, Switch, type Column } from '../../components/ui'
+import { Button, Checkbox, DataTable, EmptyState, Menu, Pager, Segmented, Select, Switch, confirmDialog, type Column } from '../../components/ui'
+import { BusinessModal, CategoriesModal } from './MapsManage'
 
 type BusinessType = 'all' | 'with' | 'without'
 type TriState = '' | 'with' | 'without'
@@ -78,6 +79,9 @@ export function MapsPage() {
   const [offset, setOffset] = useState(0)
   const [pageSize, setPageSize] = useState(50)
   const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [bizModal, setBizModal] = useState<{ id: number | null } | null>(null)
+  const [catsOpen, setCatsOpen] = useState(false)
+  const { data: leadCats } = useQuery<{ id: number; name: string }[]>('leads:categories', [], { events: ['leads:changed'] })
   const { busy, run } = useAction()
 
   // Restore an in-progress search when returning to this tab.
@@ -109,6 +113,16 @@ export function MapsPage() {
         setOffset(0)
       }
     })
+
+  const deleteSelected = async () => {
+    const ids = [...selected]
+    if (!ids.length) return
+    if (!(await confirmDialog({ title: `Delete ${fmtNum(ids.length)} business${ids.length > 1 ? 'es' : ''}?`, body: 'They are removed with their emails and their place in campaigns. Past conversations are kept. Searching again can find them again.', confirm: 'Delete', danger: true }))) return
+    const r = await run('del', () => rpc<number>('maps:delete', ids), { success: (n) => `${fmtNum(n)} business${n === 1 ? '' : 'es'} deleted` })
+    if (r !== undefined) setSelected(new Set())
+  }
+  const moveSelected = (categoryId: number, name: string) =>
+    run('mv', () => rpc<number>('maps:moveToCategory', [...selected], categoryId), { success: (n) => `${fmtNum(n)} moved to ${name}` })
 
   const exportAs = (format: 'csv' | 'xlsx', which: 'all' | 'selected') =>
     run('exp', () => rpc('maps:export', which === 'selected' ? { ids: [...selected], format } : { filter: apiFilter, format }), {
@@ -233,7 +247,25 @@ export function MapsPage() {
         {/* ---------------- toolbar ---------------- */}
         <div className="row mt-16" style={{ marginBottom: 10 }}>
           <b style={{ fontSize: 14 }}>{fmtNum(data?.total ?? 0)} businesses</b>
-          {selected.size > 0 && <span className="faint" style={{ fontSize: 12.5 }}>· {selected.size} selected <a style={{ cursor: 'pointer' }} onClick={() => setSelected(new Set())}>clear</a></span>}
+          {selected.size > 0 ? (
+            <>
+              <span className="faint" style={{ fontSize: 12.5 }}>· {selected.size} selected <a style={{ cursor: 'pointer' }} onClick={() => setSelected(new Set())}>clear</a></span>
+              <Menu
+                trigger={(o) => <Button size="sm" icon={<FolderInput size={13} />} onClick={o} loading={busy === 'mv'}>Move to category</Button>}
+                items={[
+                  ...(leadCats ?? []).map((c) => ({ label: c.name, onClick: () => moveSelected(c.id, c.name) })),
+                  { sep: true },
+                  { label: 'Manage categories…', icon: <Tags size={14} />, onClick: () => setCatsOpen(true) }
+                ]}
+              />
+              <Button size="sm" variant="danger" icon={<Trash2 size={13} />} loading={busy === 'del'} onClick={deleteSelected}>Delete</Button>
+            </>
+          ) : (
+            <>
+              <Button size="sm" variant="ghost" icon={<Plus size={13} />} onClick={() => setBizModal({ id: null })}>Add business</Button>
+              <Button size="sm" variant="ghost" icon={<Tags size={13} />} onClick={() => setCatsOpen(true)}>Categories</Button>
+            </>
+          )}
           <div className="grow" />
           <BackgroundNote bg={bg} />
           {bg?.verifyEmails && <VerifyProgress bg={bg} />}
@@ -267,6 +299,7 @@ export function MapsPage() {
             selectable
             selected={selected}
             onSelect={(s) => setSelected(s as Set<number>)}
+            onRowClick={(r) => setBizModal({ id: r.id })}
             sort={sort}
             onSort={(s) => {
               setSort(s)
@@ -291,6 +324,8 @@ export function MapsPage() {
           )}
         </div>
       </div>
+      <BusinessModal open={!!bizModal} id={bizModal?.id ?? null} onClose={() => setBizModal(null)} />
+      <CategoriesModal open={catsOpen} onClose={() => setCatsOpen(false)} />
     </div>
   )
 }

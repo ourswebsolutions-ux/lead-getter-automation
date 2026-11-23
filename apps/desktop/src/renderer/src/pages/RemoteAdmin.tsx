@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Smartphone, ShieldCheck, Send, BellRing, Power, MessageCircle, CircleAlert, LockKeyhole } from 'lucide-react'
+import { Smartphone, ShieldCheck, Send, BellRing, Power, MessageCircle, CircleAlert, LockKeyhole, Trash2 } from 'lucide-react'
 import { rpc, useAction, useQuery } from '../lib/rpc'
 import { fmtRelative } from '../lib/format'
-import { Button, Card, Field, Input, Select, Switch, SwitchRow, Callout } from '../components/ui'
+import { Button, Card, Field, Input, Select, Switch, SwitchRow, Callout, confirmDialog } from '../components/ui'
 
 const NOTIFY: [string, string][] = [
   ['notifyReplies', 'Every new client reply (email & WhatsApp)'],
@@ -103,7 +103,19 @@ export function RemoteAdminSettings() {
         </div>
       </div>
 
-      <Card title="Command history" sub="What you asked on WhatsApp and what the software did" tight>
+      <Card
+        title="Command history"
+        sub="What you asked on WhatsApp and what the software did"
+        tight
+        actions={st.history?.length ? (
+          <Button size="sm" variant="ghost" icon={<Trash2 size={13} />} onClick={async () => {
+            if (await confirmDialog({ title: 'Clear command history?', body: 'The list of WhatsApp commands is removed from this app. Nothing is deleted on WhatsApp.', confirm: 'Clear' })) {
+              await rpc('remote:clearHistory')
+              reload()
+            }
+          }}>Clear</Button>
+        ) : undefined}
+      >
         {!st.history?.length ? (
           <div className="faint" style={{ padding: 16, fontSize: 12.5 }}>No WhatsApp commands yet.</div>
         ) : (

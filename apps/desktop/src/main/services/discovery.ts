@@ -290,3 +290,16 @@ export function searchHistory(source?: string) {
     ...(source ? [source] : [])
   )
 }
+
+export function deleteSearchHistory(ids: number[]): number {
+  let n = 0
+  for (const id of ids) n += Number(db().run('DELETE FROM search_history WHERE id = ?', id).changes)
+  if (n) bus.publish('discovery:history', {})
+  return n
+}
+
+export function clearSearchHistory(source?: string): number {
+  const n = Number((source ? db().run('DELETE FROM search_history WHERE source = ?', source) : db().run('DELETE FROM search_history')).changes)
+  if (n) bus.publish('discovery:history', {})
+  return n
+}

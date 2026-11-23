@@ -212,7 +212,10 @@ app.whenReady().then(async () => {
 
   if (!app.isPackaged && process.env.LGE_CAPTURE_DIR) {
     const dev = await import('./devCapture')
-    if (process.env.LGE_CAPTURE_MAPS === 'layout') void dev.runMapsLayoutCapture(process.env.LGE_CAPTURE_DIR)
+    if (process.env.LGE_CAPTURE_CRUD) {
+      dev.seedSampleData()
+      void dev.runCrudCapture(process.env.LGE_CAPTURE_DIR)
+    } else if (process.env.LGE_CAPTURE_MAPS === 'layout') void dev.runMapsLayoutCapture(process.env.LGE_CAPTURE_DIR)
     else if (process.env.LGE_CAPTURE_MAPS) void dev.runMapsCapture(process.env.LGE_CAPTURE_DIR)
     else {
       dev.seedSampleData()

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Search, MessageCircle, Mail, Bot, Hand, Pause, Play, CheckCircle2, Send, Sparkles, Globe, Phone, MapPin, ExternalLink, Tag, ThumbsUp, ThumbsDown, RotateCcw, MessagesSquare } from 'lucide-react'
+import { Search, MessageCircle, Mail, Bot, Hand, Pause, Play, CheckCircle2, Send, Sparkles, Globe, Phone, MapPin, ExternalLink, Tag, ThumbsUp, ThumbsDown, RotateCcw, MessagesSquare, Trash2, Eraser, ListChecks, X } from 'lucide-react'
 import { rpc, useAction, useQuery, useEvent } from '../lib/rpc'
 import { useNav } from '../lib/nav'
 import { fmtRelative, fmtTime, initials, avatarColor, parseDate, SOURCE_LABEL } from '../lib/format'
-import { Button, EmptyState, Input, StatusPill, Textarea, Menu, Skeleton } from '../components/ui'
+import { Button, EmptyState, Input, StatusPill, Textarea, Menu, Skeleton, Checkbox, confirmDialog } from '../components/ui'
 import { ApprovalPanel } from '../components/Approval'
 
 const FOLDERS: [string, string][] = [
@@ -16,11 +16,33 @@ export function ConversationsPage() {
   const [folder, setFolder] = useState<string>(params.folder ?? 'all')
   const [search, setSearch] = useState('')
   const [sel, setSel] = useState<number | null>(params.id ?? null)
+  const [picking, setPicking] = useState(false)
+  const [picked, setPicked] = useState<Set<number>>(new Set())
+  const { run } = useAction()
   const { data: list, loading } = useQuery<any[]>('conversations:list', [{ folder, search: search || undefined }], { events: ['conversation:*', 'approval:*'] })
   const { data: counts } = useQuery<Record<string, number>>('conversations:counts', [], { events: ['conversation:*', 'approval:*'] })
   useEffect(() => {
-    if (sel == null && list?.length) setSel(list[0].id)
+    if (!list) return
+    if (sel == null && list.length) setSel(list[0].id)
+    else if (sel != null && !list.some((c) => c.id === sel) && folder === 'all' && !search) setSel(list[0]?.id ?? null)
+    setPicked((p) => new Set([...p].filter((id) => list.some((c) => c.id === id))))
   }, [list])
+
+  const deletePicked = async () => {
+    const ids = [...picked]
+    if (!ids.length) return
+    const ok = await confirmDialog({
+      title: `Delete ${ids.length} conversation${ids.length > 1 ? 's' : ''}?`,
+      body: 'The chats and their messages are removed from this app. Nothing is deleted on WhatsApp or in your mailbox, and people who opted out stay blocked.',
+      confirm: 'Delete',
+      danger: true
+    })
+    if (!ok) return
+    await run('del', () => rpc('conversations:delete', ids), { success: `${ids.length} conversation${ids.length > 1 ? 's' : ''} deleted` })
+    if (sel != null && ids.includes(sel)) setSel(null)
+    setPicked(new Set())
+    setPicking(false)
+  }
 
   return (
     <div className="page flush">
@@ -37,9 +59,22 @@ export function ConversationsPage() {
       </div>
       <div className="inbox" style={{ flex: 1, minHeight: 0 }}>
         <section className="left">
-          <div style={{ padding: '12px 12px 0' }}>
-            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search conversations" icon={<Search size={14} />} />
+          <div className="row" style={{ padding: '12px 12px 0', gap: 6 }}>
+            <Input className="grow" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search conversations" icon={<Search size={14} />} />
+            <Button size="sm" variant={picking ? 'primary' : 'ghost'} iconOnly icon={picking ? <X size={14} /> : <ListChecks size={15} />} title={picking ? 'Done selecting' : 'Select conversations to delete'} onClick={() => { setPicking(!picking); setPicked(new Set()) }} />
           </div>
+          {picking && (
+            <div className="row" style={{ padding: '8px 12px 0', gap: 8, fontSize: 12.5 }}>
+              <Checkbox
+                checked={!!list?.length && picked.size === list.length}
+                indeterminate={picked.size > 0 && picked.size < (list?.length ?? 0)}
+                onChange={(v) => setPicked(v ? new Set((list ?? []).map((c) => c.id)) : new Set())}
+                label={picked.size ? `${picked.size} selected` : 'Select all'}
+              />
+              <div className="grow" />
+              <Button size="sm" variant="danger" icon={<Trash2 size={13} />} disabled={!picked.size} onClick={deletePicked}>Delete</Button>
+            </div>
+          )}
           <div className="folder-strip">
             {FOLDERS.map(([k, l]) => (
               <button key={k} className={folder === k ? 'on' : ''} onClick={() => setFolder(k)}>
@@ -57,7 +92,12 @@ export function ConversationsPage() {
               list.map((c) => {
                 const name = c.contact_name || c.business_name || (c.channel === 'whatsapp' ? `+${c.address}` : c.address)
                 return (
-                  <div key={c.id} className={`conv-item ${sel === c.id ? 'on' : ''}`} onClick={() => setSel(c.id)}>
+                  <div
+                    key={c.id}
+                    className={`conv-item ${sel === c.id ? 'on' : ''}`}
+                    onClick={() => (picking ? setPicked((p) => { const n = new Set(p); n.has(c.id) ? n.delete(c.id) : n.add(c.id); return n }) : setSel(c.id))}
+                  >
+                    {picking && <span onClick={(e) => e.stopPropagation()} style={{ alignSelf: 'center' }}><Checkbox checked={picked.has(c.id)} onChange={(v) => setPicked((p) => { const n = new Set(p); v ? n.add(c.id) : n.delete(c.id); return n })} /></span>}
                     <div className="avatar" style={{ background: avatarColor(name) }}>
                       {initials(name)}
                       <span className="ch">{c.channel === 'whatsapp' ? <MessageCircle size={10} /> : <Mail size={10} />}</span>
@@ -87,7 +127,7 @@ export function ConversationsPage() {
             )}
           </div>
         </section>
-        {sel ? <Workspace key={sel} id={sel} /> : (
+        {sel ? <Workspace key={sel} id={sel} onDeleted={() => setSel(null)} /> : (
           <>
             <section style={{ display: 'grid', placeItems: 'center' }}><EmptyState icon={<MessagesSquare size={22} />} title="Select a conversation" /></section>
             <section className="right" />
@@ -98,7 +138,7 @@ export function ConversationsPage() {
   )
 }
 
-function Workspace({ id }: { id: number }) {
+function Workspace({ id, onDeleted }: { id: number; onDeleted: () => void }) {
   const { go } = useNav()
   const { data: c, reload } = useQuery<any>('conversations:get', [id], { events: ['conversation:*', 'approval:*'] })
   const [text, setText] = useState('')
@@ -148,6 +188,21 @@ function Workspace({ id }: { id: number }) {
     })
   const setMode = (m: string, msg: string) => run('m', () => rpc('conversations:setAiMode', id, m), { success: msg }).then(reload)
   const update = (patch: any, msg?: string) => run('u', () => rpc('conversations:update', id, patch), msg ? { success: msg } : {}).then(reload)
+  const clearChat = async () => {
+    if (!(await confirmDialog({ title: `Clear the chat with ${name}?`, body: 'All messages in this chat are removed from this app. The contact, notes and settings stay. Nothing is deleted on WhatsApp or in your mailbox.', confirm: 'Clear chat', danger: true }))) return
+    await run('clr', () => rpc('conversations:clear', id), { success: 'Chat cleared' })
+    reload()
+  }
+  const deleteChat = async () => {
+    if (!(await confirmDialog({ title: `Delete the conversation with ${name}?`, body: 'The chat and all its messages are removed from this app. Nothing is deleted on WhatsApp or in your mailbox. If they write again, a new conversation starts.', confirm: 'Delete', danger: true }))) return
+    const r = await run('del', () => rpc('conversations:delete', [id]), { success: 'Conversation deleted' })
+    if (r !== undefined) onDeleted()
+  }
+  const deleteMessage = async (m: any) => {
+    if (!(await confirmDialog({ title: 'Delete this message?', body: 'It is removed from this app only — the other person still has it.', confirm: 'Delete', danger: true }))) return
+    await run('dm', () => rpc('conversations:deleteMessages', id, [m.id]), { success: 'Message deleted' })
+    reload()
+  }
 
   let lastDay = ''
   return (
@@ -188,7 +243,10 @@ function Workspace({ id }: { id: number }) {
               { sep: true },
               c.status === 'resolved'
                 ? { label: 'Reopen', icon: <RotateCcw size={14} />, onClick: () => update({ status: 'open' }, 'Reopened') }
-                : { label: 'Mark resolved', icon: <CheckCircle2 size={14} />, onClick: () => update({ status: 'resolved' }, 'Conversation resolved') }
+                : { label: 'Mark resolved', icon: <CheckCircle2 size={14} />, onClick: () => update({ status: 'resolved' }, 'Conversation resolved') },
+              { sep: true },
+              { label: 'Clear chat', icon: <Eraser size={14} />, disabled: !c.messages.length, onClick: clearChat },
+              { label: 'Delete conversation', icon: <Trash2 size={14} />, danger: true, onClick: deleteChat }
             ]}
           />
         </div>
@@ -198,7 +256,13 @@ function Workspace({ id }: { id: number }) {
             const day = parseDate(m.created_at)?.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) ?? ''
             const sep = day !== lastDay
             lastDay = day
-            if (m.author === 'system') return <div key={m.id} className="msg-system">{m.body}</div>
+            if (m.author === 'system')
+              return (
+                <div key={m.id} className="msg-system msg-hover">
+                  {m.body}
+                  <button className="msg-del" title="Delete message" onClick={() => deleteMessage(m)}><Trash2 size={12} /></button>
+                </div>
+              )
             return (
               <div key={m.id}>
                 {sep && <div className="day-sep" style={{ textAlign: 'center' }}>{day}</div>}
@@ -209,6 +273,7 @@ function Workspace({ id }: { id: number }) {
                     {m.direction === 'out' && <span>{m.author === 'ai' ? <><Bot size={11} style={{ verticalAlign: -2 }} /> AI</> : m.author === 'campaign' ? 'Campaign' : 'You'}</span>}
                     <span>{fmtTime(m.created_at)}</span>
                     {m.direction === 'out' && m.status !== 'sent' && <span style={{ color: m.status === 'failed' ? 'var(--red)' : undefined }}>· {m.status === 'failed' ? `Failed: ${m.error}` : m.status}</span>}
+                    <button className="msg-del" title="Delete message (from this app only)" onClick={() => deleteMessage(m)}><Trash2 size={12} /></button>
                   </div>
                 </div>
               </div>

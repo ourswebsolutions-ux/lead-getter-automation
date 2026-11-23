@@ -263,3 +263,20 @@ export async function pool<T>(items: T[], limit: number, ctx: JobContext | null,
   })
   await Promise.all(workers)
 }
+
+const DONE = "status IN ('completed','failed','cancelled')"
+
+/** Removes finished tasks (and their logs) from the list. Running, queued and paused tasks are kept. */
+export function deleteJobs(ids: string[]): number {
+  let n = 0
+  for (const id of ids) n += Number(db().run(`DELETE FROM jobs WHERE id = ? AND ${DONE}`, id).changes)
+  if (n) bus.publish('job:deleted', { ids })
+  return n
+}
+
+export function clearFinishedJobs(types?: string[]): number {
+  const where = types?.length ? ` AND type IN (${types.map(() => '?').join(',')})` : ''
+  const n = Number(db().run(`DELETE FROM jobs WHERE ${DONE}${where}`, ...(types ?? [])).changes)
+  if (n) bus.publish('job:deleted', { all: true })
+  return n
+}

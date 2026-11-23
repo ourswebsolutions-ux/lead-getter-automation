@@ -64,6 +64,18 @@ export function updateSmtpAccount(id: number, a: SmtpAccountInput & { enabled?: 
   transporters.delete(id)
 }
 
+/** Small edits from the account menu: sender name, reply-to, daily limit, paused or not. */
+export function patchSmtpAccount(id: number, p: { from_name?: string; reply_to?: string | null; daily_limit?: number; enabled?: boolean }): void {
+  if (p.daily_limit !== undefined && (!Number.isFinite(p.daily_limit) || p.daily_limit < 1 || p.daily_limit > 2000)) throw new Error('Daily limit must be between 1 and 2000')
+  if (p.reply_to && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.reply_to.trim())) throw new Error('Reply-to must be an email address')
+  db().run(
+    `UPDATE smtp_accounts SET from_name = COALESCE(?, from_name), reply_to = CASE WHEN ? THEN ? ELSE reply_to END,
+     daily_limit = COALESCE(?, daily_limit), enabled = COALESCE(?, enabled) WHERE id = ?`,
+    p.from_name?.trim() ?? null, p.reply_to !== undefined ? 1 : 0, p.reply_to?.trim() || null, p.daily_limit ?? null, p.enabled === undefined ? null : p.enabled ? 1 : 0, id
+  )
+  transporters.delete(id)
+}
+
 export function deleteSmtpAccount(id: number): void {
   db().run('DELETE FROM smtp_accounts WHERE id = ?', id)
   secrets.delete(pwKey(id))

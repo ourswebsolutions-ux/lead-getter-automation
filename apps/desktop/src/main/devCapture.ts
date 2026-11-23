@@ -221,3 +221,70 @@ export async function runMapsLayoutCapture(dir: string): Promise<void> {
   writeFileSync(join(dir, 'maps-layout.json'), JSON.stringify(m))
   app.quit()
 }
+
+/** Screenshots of the delete / edit controls (dev only): LGE_CAPTURE_DIR=… LGE_CAPTURE_CRUD=1 */
+export async function runCrudCapture(dir: string): Promise<void> {
+  mkdirSync(dir, { recursive: true })
+  const manage = await import('./services/maps/manage')
+  const { createCategory } = await import('./services/leads')
+  try { createCategory('Shoes') } catch { /* exists */ }
+  for (const [name, web, email] of [['Hamza Shoes', 'hamzashoes.pk', 'info@hamzashoes.pk'], ['Royal Bakers', '', ''], ['City Garments', 'citygarments.pk', 'sales@citygarments.pk']])
+    manage.addBusiness({ business_name: name, website: web, email, phone: `+92 300 12345${name.length}`, city: 'Lahore', business_category: 'Shoe store' })
+  const win = BrowserWindow.getAllWindows()[0]
+  const wc = win.webContents
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
+  const js = (code: string) => wc.executeJavaScript(`(() => { ${code}; return true })()`)
+  const clickText = (sel: string, text: string) => js(`[...document.querySelectorAll(${JSON.stringify(sel)})].find((b) => b.textContent.trim().includes(${JSON.stringify(text)}))?.click()`)
+  const shot = async (name: string) => {
+    await wc.insertCSS('*,*::before,*::after{animation:none!important;transition:none!important}')
+    await wait(400)
+    writeFileSync(join(dir, `${name}.png`), (await wc.capturePage()).toPNG())
+  }
+  const open = async (page: string) => {
+    await js(`localStorage.setItem('lge.page', ${JSON.stringify(JSON.stringify(page))}); location.reload()`)
+    await wait(3000)
+  }
+  await wait(2500)
+  // Conversations: select mode + More menu
+  await open('conversations')
+  await js(`document.querySelector('button[title="Select conversations to delete"]')?.click()`)
+  await wait(500)
+  await js(`[...document.querySelectorAll('.conv-item')].slice(0, 2).forEach((e) => e.click())`)
+  await wait(500)
+  await shot('conv-select')
+  await js(`document.querySelector('button[title="Done selecting"]')?.click()`)
+  await wait(300)
+  await clickText('button', 'More')
+  await wait(500)
+  await shot('conv-more')
+  await js(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`)
+  await clickText('.menu button, .menu [role=menuitem], .menu div', 'Delete conversation')
+  await wait(600)
+  await shot('conv-delete-confirm')
+  // Maps: toolbar, selected actions, business modal, categories
+  await open('maps')
+  await shot('maps-toolbar')
+  await js(`[...document.querySelectorAll('tbody input[type=checkbox], tbody .checkbox, tbody [role=checkbox]')].slice(0, 2).forEach((e) => e.click())`)
+  await wait(500)
+  await shot('maps-selected')
+  await js(`document.querySelector('tbody tr td:nth-child(3)')?.click()`)
+  await wait(1200)
+  await shot('maps-edit')
+  await js(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`)
+  await open('maps')
+  await clickText('button', 'Categories')
+  await wait(1000)
+  await shot('maps-categories')
+  await open('maps')
+  await clickText('button', 'Add business')
+  await wait(800)
+  await shot('maps-add')
+  await js(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`)
+  await open('email-accounts')
+  await js(`document.querySelector('.card .row button.btn.sm.ghost')?.click()`)
+  await wait(500)
+  await clickText('.menu button, .menu div', 'Edit details')
+  await wait(800)
+  await shot('email-edit')
+  app.quit()
+}

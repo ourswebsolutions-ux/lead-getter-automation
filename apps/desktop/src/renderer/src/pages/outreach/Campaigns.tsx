@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Play, Pause, Square, Trash2, Pencil, ArrowLeft, Eye, Users, Send, Mails, CalendarClock, Sparkles, Code2, Clock } from 'lucide-react'
+import { Plus, Play, Pause, Square, Trash2, Pencil, ArrowLeft, Eye, Users, Send, Mails, CalendarClock, Sparkles, Code2, Clock, Type } from 'lucide-react'
 import { rpc, useAction, useQuery } from '../../lib/rpc'
 import { EmailLaunch } from './EmailLaunch'
 import { useNav } from '../../lib/nav'
@@ -329,6 +329,7 @@ function CampaignDetail({ id, channel, onBack, onEdit }: { id: number; channel: 
   const [schedule, setSchedule] = useState(false)
   const [when, setWhen] = useState('')
   const [preview, setPreview] = useState<any>(null)
+  const [renameTo, setRenameTo] = useState<string | null>(null)
   const { data: rec, loading } = useQuery<any>('campaigns:recipients', [id, { status: status || undefined, limit: 50, offset }], { events: ['campaign:updated'] })
   const { busy, run } = useAction()
   if (!c) return <div className="page"><div className="skel" style={{ height: 200 }} /></div>
@@ -351,7 +352,8 @@ function CampaignDetail({ id, channel, onBack, onEdit }: { id: number; channel: 
               {c.status === 'running' && <Button icon={<Pause size={14} />} onClick={() => act('campaigns:pause', 'Campaign paused')}>Pause</Button>}
               {c.status === 'paused' && <Button variant="primary" icon={<Play size={14} />} onClick={() => act('campaigns:resume', 'Campaign resumed')}>Resume</Button>}
               {['running', 'paused', 'scheduled'].includes(c.status) && <Button variant="ghost" className="danger" icon={<Square size={14} />} onClick={async () => { if (await confirmDialog({ title: 'Stop this campaign?', body: 'Queued messages and follow-ups are cancelled. This cannot be resumed.', confirm: 'Stop campaign', danger: true })) act('campaigns:stop', 'Campaign stopped') }}>Stop</Button>}
-              {c.status !== 'running' && <Button variant="ghost" iconOnly icon={<Trash2 size={14} />} onClick={async () => { if (await confirmDialog({ title: 'Delete campaign?', body: 'Its recipients and execution history are deleted. Conversations are kept.', confirm: 'Delete', danger: true })) run('del', () => rpc('campaigns:delete', id), { success: 'Campaign deleted' }).then(onBack) }} />}
+              <Button variant="ghost" iconOnly icon={<Type size={14} />} title="Rename" onClick={() => setRenameTo(c.name)} />
+              {c.status !== 'running' && <Button variant="ghost" iconOnly title="Delete campaign" icon={<Trash2 size={14} />} onClick={async () => { if (await confirmDialog({ title: 'Delete campaign?', body: 'Its recipients and execution history are deleted. Conversations are kept.', confirm: 'Delete', danger: true })) run('del', () => rpc('campaigns:delete', id), { success: 'Campaign deleted' }).then(onBack) }} />}
             </>
           }
         />
@@ -382,7 +384,7 @@ function CampaignDetail({ id, channel, onBack, onEdit }: { id: number; channel: 
               loading={loading}
               rows={rec?.rows}
               compact
-              empty={<EmptyState icon={<Users size={20} />} title="No recipients" desc="Select leads in Leads Management and choose “Add to campaign”." />}
+              empty={<EmptyState icon={<Users size={20} />} title="No recipients" desc={status ? 'No recipients with this status.' : 'Leads that match the campaign audience are added when it is created.'} />}
               columns={[
                 { key: 'b', header: 'Lead', render: (r: any) => <><div className="primary-cell">{r.business_name}</div><div className="sub-cell">{r.contact_name ?? r.city ?? ''}</div></> },
                 { key: 'a', header: wa ? 'Phone' : 'Email', render: (r: any) => <span className="mono">{wa ? `+${r.address}` : r.address}</span> },
@@ -391,7 +393,19 @@ function CampaignDetail({ id, channel, onBack, onEdit }: { id: number; channel: 
                 { key: 'l', header: 'Last sent', render: (r: any) => <span className="faint">{fmtRelative(r.last_sent_at)}</span> },
                 { key: 'n', header: 'Next', render: (r: any) => <span className="faint">{r.next_send_at && ['sent', 'queued'].includes(r.status) ? fmtDate(r.next_send_at, true) : '—'}</span> },
                 { key: 'e', header: 'Note', render: (r: any) => <span className="truncate faint" style={{ display: 'block', maxWidth: 240, fontSize: 12 }} title={r.error}>{r.error ?? ''}</span> },
-                { key: 'p', header: '', render: (r: any) => <Button size="sm" variant="ghost" iconOnly icon={<Eye size={13} />} title="Preview message" onClick={async () => setPreview(await run('pv', () => rpc('campaigns:preview', id, r.lead_id, wa ? r.id % Math.max(1, c.steps.length) : 0)))} /> }
+                {
+                  key: 'p', header: '', render: (r: any) => (
+                    <div className="row gap-4" style={{ justifyContent: 'flex-end' }}>
+                      <Button size="sm" variant="ghost" iconOnly icon={<Eye size={13} />} title="Preview message" onClick={async () => setPreview(await run('pv', () => rpc('campaigns:preview', id, r.lead_id, wa ? r.id % Math.max(1, c.steps.length) : 0)))} />
+                      {r.status === 'queued' && (
+                        <Button size="sm" variant="ghost" iconOnly icon={<Trash2 size={13} />} title="Remove from this campaign" onClick={async () => {
+                          if (await confirmDialog({ title: `Remove ${r.business_name} from this campaign?`, body: 'They will not receive this campaign. The business itself is kept.', confirm: 'Remove', danger: true }))
+                            run('rr', () => rpc('campaigns:removeRecipients', id, [r.id]), { success: 'Removed from campaign' })
+                        }} />
+                      )}
+                    </div>
+                  )
+                }
               ]}
             />
             <Pager total={rec?.total ?? 0} offset={offset} limit={50} onChange={setOffset} />
@@ -419,6 +433,14 @@ function CampaignDetail({ id, channel, onBack, onEdit }: { id: number; channel: 
           </Card>
         )}
       </div>
+      <Modal
+        open={renameTo !== null}
+        onClose={() => setRenameTo(null)}
+        title="Rename campaign"
+        footer={<><Button onClick={() => setRenameTo(null)}>Cancel</Button><Button variant="primary" disabled={!renameTo?.trim()} loading={busy === 'ren'} onClick={() => run('ren', () => rpc('campaigns:rename', id, renameTo), { success: 'Campaign renamed' }).then((r) => { if (r !== undefined) { setRenameTo(null); reload() } })}>Save</Button></>}
+      >
+        <Field label="Campaign name"><Input autoFocus value={renameTo ?? ''} onChange={(e) => setRenameTo(e.target.value)} /></Field>
+      </Modal>
       <Modal open={schedule} onClose={() => setSchedule(false)} title="Schedule campaign" footer={<><Button onClick={() => setSchedule(false)}>Cancel</Button><Button variant="primary" disabled={!when} onClick={() => run('sch', () => rpc('campaigns:start', id, new Date(when).toISOString()), { success: 'Campaign scheduled' }).then(() => { setSchedule(false); reload() })}>Schedule</Button></>}>
         <Field label="Start at" hint="Your computer must be running for the campaign to send."><Input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} /></Field>
       </Modal>

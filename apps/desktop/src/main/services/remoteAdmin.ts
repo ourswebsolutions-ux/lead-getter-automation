@@ -264,3 +264,10 @@ export function remoteStatus() {
       .map((r) => ({ at: r.created_at, ...JSON.parse(r.detail ?? '{}') }))
   }
 }
+
+/** Empties the WhatsApp command history shown in Settings. */
+export function clearRemoteHistory(): number {
+  const n = Number(db().run("DELETE FROM activity_logs WHERE action = 'remote_command'").changes)
+  bus.publish('remote:status', {})
+  return n
+}
