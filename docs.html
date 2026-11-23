@@ -206,7 +206,7 @@
           <li><b>Left menu</b>: every section, grouped into <i>Main</i>, <i>Find leads</i>, <i>Outreach</i> and <i>Settings</i>. The arrow collapses it to icons. The search box at the top filters the menu.</li>
           <li><b>Bell</b> (next to the logo): replies and approvals that need you. Numbers on <i>Conversations</i> (unread) and <i>AI Sales Agent</i> (waiting approvals) show the same.</li>
           <li><b>Top bar</b>: the <b>WhatsApp</b> button (accounts, QR codes, daily limits) and the <b>plan</b> button (trial days left, activation).</li>
-          <li><b>Background tasks</b>: long jobs (searches, email finding, verification) show live progress with <b>Pause</b>, <b>Resume</b> and <b>Cancel</b>. They continue if you switch pages and resume after a restart.</li>
+          <li><b>Background tasks</b>: long jobs (searches, email finding, verification) show live progress with <b>Pause</b>, <b>Resume</b> and <b>Cancel</b>. They continue if you switch pages and resume after a restart. <b>Clear finished</b> (or the bin on a finished task) tidies the list; results are kept.</li>
         </ul>
       </section>
 
@@ -261,6 +261,7 @@
         <ul>
           <li>Search by name, number or email. Filters show <b>Needs approval</b>, <b>AI paused</b> and <b>Interested</b> chats.</li>
           <li>A banner tells you when the AI will reply, for example “AI will reply in 4 min”.</li>
+          <li><b>Delete chats</b>: click the <b>select</b> icon next to the search box, tick one or more chats (or <b>Select all</b>), then <b>Delete</b>.</li>
         </ul>
         <h3>Chat (middle)</h3>
         <ul>
@@ -276,6 +277,13 @@
           <li><b>Business research</b> notes. Type your own notes and press <b>Save notes</b>.</li>
           <li><b>Mark interested / not interested</b>, <b>Assign to me</b>, <b>Mark resolved</b> / <b>Reopen</b>.</li>
         </ul>
+        <h3>Delete chats and messages</h3>
+        <ul>
+          <li><b>More → Clear chat</b>: removes all messages but keeps the contact, notes and settings.</li>
+          <li><b>More → Delete conversation</b>: removes the chat completely. If the person writes again, a new conversation starts.</li>
+          <li><b>One message</b>: point at the message and click the small bin icon next to its time.</li>
+        </ul>
+        <div class="note">Deleting only removes it from this app. Nothing is deleted on WhatsApp or in your mailbox, and people who opted out stay blocked.</div>
       </section>
 
       <section class="doc" id="agent">
@@ -361,7 +369,10 @@
         <ul>
           <li>Tabs: <b>All businesses</b>, <b>With website</b>, <b>Without website</b>. Businesses without a website are good prospects if you sell websites.</li>
           <li>Filters: category, business type, rating (3+, 4+ stars), email yes/no. <b>Clear filters</b> resets them.</li>
-          <li>Click a business to see its details or <b>Open in Google Maps</b>.</li>
+          <li><b>Click a business</b> to open it: edit its name, phone, website, address, business type, campaign category and notes; add, remove or choose the main email; or <b>Delete</b> it.</li>
+          <li><b>Add business</b>: type in a business you found yourself. It is saved like a searched one and can be used in campaigns. If the same phone, website or email is already saved, the app tells you.</li>
+          <li>Tick businesses to <b>Move to category</b> (for campaigns) or <b>Delete</b> them. Deleted businesses are removed completely, so a new search can find them again.</li>
+          <li><b>Categories</b>: create, rename or delete the categories campaigns use. Deleting a category moves its businesses to “Other”; they are not deleted.</li>
           <li>Export: <b>Export all</b> or <b>Export selected</b>, as <b>CSV</b> or <b>Excel</b>. Search history and background tasks are on the right.</li>
         </ul>
         <div class="qa">
@@ -381,6 +392,7 @@
           <li>Optional: <b>Reveal work emails (enrichment)</b> finds emails for contacts without one. This uses Apollo credits; the app shows the maximum it can use before you start.</li>
           <li>Press <b>Start search</b>. Results appear under <b>Contacts</b> and <b>Companies</b>.</li>
         </ol>
+        <p><b>Search history</b> shows past searches. Remove one with its bin icon or press <b>Clear</b>; the leads they found are kept.</p>
         <div class="note">Searches count against your Apollo plan's API limits.</div>
       </section>
 
@@ -420,6 +432,7 @@
           <li>The status turns <b>Connected</b>. The session is saved, so you don't scan again after restarting.</li>
         </ol>
         <dl class="fields">
+          <dt>Rename</dt><dd>Click the pencil next to the account name.</dd>
           <dt>Daily limit</dt><dd>Maximum campaign messages per day from this number (default 40). Start low with new numbers.</dd>
           <dt>Reconnect</dt><dd>If it shows disconnected, reconnects with the saved session.</dd>
           <dt>Disconnect / Log out</dt><dd>Disconnect pauses it. <b>Log out</b> removes the session (you'll need to scan again).</dd>
@@ -441,7 +454,7 @@
           <li><b>Pacing & safety</b>: delay between messages, campaign daily limit, <b>Randomise delay ±25%</b>, <b>Skip leads contacted by other campaigns</b>, and a <b>Sending window</b> (hours/days in your computer's time zone).</li>
           <li><b>Send from</b>: pick which WhatsApp accounts to use. Check <b>Preview message</b>, then <b>Start now</b> or <b>Schedule</b>.</li>
         </ol>
-        <p>On the campaign page: recipients with status (queued, sent, replied, failed/skipped), activity log, and <b>Pause</b>, <b>Stop</b> or <b>Delete</b>.</p>
+        <p>On the campaign page: recipients with status (queued, sent, replied, failed/skipped), activity log, and <b>Edit</b>, <b>Rename</b>, <b>Pause</b>, <b>Stop</b> or <b>Delete</b>. To leave someone out, click the bin icon on their row while they are still <i>queued</i>.</p>
         <div class="note">Your computer must be on (the app can run in the background) for scheduled campaigns to send.</div>
       </section>
 
@@ -455,6 +468,12 @@
           <li>If it can't find the server, fill <b>SMTP server</b> and <b>Port</b> yourself (for example <code>smtp.yourdomain.com</code>, port <code>465</code>). Ask your hosting provider if unsure.</li>
           <li>Use <b>Send a test email</b> to check it works.</li>
         </ol>
+        <h3>Edit or remove an account</h3>
+        <p>Click the <b>⋯</b> menu next to an account:</p>
+        <ul>
+          <li><b>Edit details</b>: sender name, reply-to address, daily limit, and <b>Send from this account</b> (turn it off to pause campaigns on it; replies are still read).</li>
+          <li><b>Change password</b>, <b>Send test email</b> or <b>Remove</b>.</li>
+        </ul>
         <h3>Gmail: use an App Password</h3>
         <ol class="dsteps">
           <li>Turn on <b>2-Step Verification</b> in your Google Account (Security).</li>
@@ -494,6 +513,7 @@
           <li><b>Start now</b> or <b>Schedule</b> a date and time. Optional campaign name.</li>
         </ol>
         <p>Leads in the chosen categories with a <b>verified or risky</b> email are added; invalid emails are skipped. If you pick several templates, they take turns. Each lead gets one email; the conversation continues from their reply. Replies appear in <a class="link" href="#conversations">Conversations</a> and are answered by the <a class="link" href="#agent">AI Sales Agent</a> if it is on.</p>
+        <p>Open a campaign to see recipients, <b>Rename</b> it, remove queued recipients, pause, stop or delete it.</p>
         <div class="tip">For the best inbox placement, email only verified addresses, keep a few minutes between emails, and add 2–3 sending accounts per category.</div>
       </section>
 
@@ -528,7 +548,7 @@
           <li>Windows does not allow programs to unlock the lock screen, so on Windows unlock at the computer.</li>
         </ul>
         <h3>Notifications</h3>
-        <p>Choose what the app tells you on WhatsApp: new replies, interested leads, pricing approvals, campaign updates, finished searches, email events and errors. <b>Command history</b> shows what you sent and the results.</p>
+        <p>Choose what the app tells you on WhatsApp: new replies, interested leads, pricing approvals, campaign updates, finished searches, email events and errors. <b>Command history</b> shows what you sent and the results; <b>Clear</b> empties it.</p>
         <div class="warn">Only the verified admin number can give commands. The admin number can only be changed on the computer, in Settings, never by chat.</div>
       </section>
 
@@ -622,7 +642,7 @@
 
 <footer>
   <div class="wrap">
-    <div class="copy"><span>© <span id="year">2026</span> Lead Generation</span><span><a href="index.html">Home</a> · <a href="index.html#download">Download</a> · Version <span data-version>1.0.3</span></span></div>
+    <div class="copy"><span>© <span id="year">2026</span> Lead Generation</span><span><a href="index.html">Home</a> · <a href="index.html#download">Download</a> · Version <span data-version>1.0.4</span></span></div>
   </div>
 </footer>
 
